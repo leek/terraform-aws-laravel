@@ -1,0 +1,33 @@
+* text=auto eol=lf
+
+# Binary
+*.png   -text
+*.jpg   -text
+*.gif   -text
+*.pdf   -text
+*.zip   -text
+*.woff  -text
+*.woff2 -text
+
+*.blade.php diff=html
+*.css       diff=css
+*.html      diff=html
+*.md        diff=markdown
+*.php       diff=php
+
+/.github        export-ignore
+/tests          export-ignore
+.editorconfig   export-ignore
+.gitattributes  export-ignore
+.gitignore      export-ignore
+.styleci.yml    export-ignore
+phpstan.neon    export-ignore
+phpunit.xml     export-ignore
+README.md       export-ignore
+
+public/vendor/**       merge=ours
+composer.lock          merge=ours
+package-lock.json      merge=ours
+yarn.lock              merge=ours
+pnpm-lock.yaml         merge=ours
+_ide_helper_models.php merge=ours

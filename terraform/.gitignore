@@ -1,0 +1,110 @@
+# ========================================
+# Terraform State Files
+# ========================================
+# Local .terraform directories
+**/.terraform/*
+
+# Terraform state files
+*.tfstate
+*.tfstate.*
+
+# Terraform backup files
+*.tfstate.backup
+*.backup
+
+# Crash log files
+crash.log
+crash.*.log
+
+# ========================================
+# Sensitive Variable Files
+# ========================================
+# Exclude all .tfvars files with sensitive data
+# IMPORTANT: You should commit example.tfvars to show the structure
+*.tfvars
+*.tfvars.json
+
+# But include the example file
+!example.tfvars
+!environments/example.tfvars
+
+# ========================================
+# Environment-Specific Files (Optional)
+# ========================================
+# If you want to commit staging/production configs (NOT recommended for open source):
+# !environments/staging.tfvars
+# !environments/production.tfvars
+
+# ========================================
+# Terraform CLI Config
+# ========================================
+# Exclude override files as they are usually used to override resources locally
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Terraform CLI configuration file
+.terraformrc
+terraform.rc
+
+# ========================================
+# Provider Plugins
+# ========================================
+# Include provider lock file for version pinning
+# !.terraform.lock.hcl
+
+# ========================================
+# IDE and Editor Files
+# ========================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ========================================
+# Terraform Plan Output
+# ========================================
+*.tfplan
+*tfplan*
+
+# ========================================
+# SSH Keys and Certificates
+# ========================================
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+
+# ========================================
+# Modules (if using local modules cache)
+# ========================================
+# .terraform/modules/
+
+# ========================================
+# Temporary Files
+# ========================================
+*.tmp
+*.temp
+.tmp/
+
+# ========================================
+# OS Files
+# ========================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ========================================
+# Secrets and Credentials
+# ========================================
+secrets.auto.tfvars
+secrets.tfvars
+*.secret
+*.secrets
+credentials.json
+*.credentials

@@ -1,0 +1,272 @@
+# ========================================
+# Laravel AWS Infrastructure Configuration
+# ========================================
+# This is an example configuration file for deploying a Laravel application to AWS.
+# Copy this file and customize it for your environment:
+#   cp example.tfvars production.tfvars
+#   cp example.tfvars staging.tfvars
+
+# ========================================
+# REQUIRED: Basic Configuration
+# ========================================
+
+# Your application name (used for resource naming)
+app_name = "laravel"
+
+# Environment name (e.g., "production", "staging", "dev")
+environment = "production"
+
+# Your application's domain name
+domain_name = "example.com"
+
+# Laravel application key (generate with: php artisan key:generate --show)
+# IMPORTANT: Keep this secret! Consider using environment variables or a secrets manager.
+app_key = "base64:YOUR_APP_KEY_HERE"
+
+# GitHub repository information (used for tagging and OIDC authentication)
+github_org  = "your-org"
+github_repo = "your-repo"
+
+# ========================================
+# REQUIRED: Database Credentials
+# ========================================
+
+# Application database user password
+# IMPORTANT: Use a strong, randomly generated password
+app_db_password = "CHANGE_ME_STRONG_PASSWORD"
+
+# Read-only reporting user password (for analytics/BI tools)
+db_reporting_password = "CHANGE_ME_STRONG_PASSWORD"
+
+# ========================================
+# OPTIONAL: Search Configuration
+# ========================================
+
+# Meilisearch master key (generate random 32+ character string)
+# Only required if enable_meilisearch = true
+meilisearch_master_key = "CHANGE_ME_MEILISEARCH_KEY"
+
+# ========================================
+# Container Configuration
+# ========================================
+
+# ECS Fargate container resources
+# CPU units (1024 = 1 vCPU). Options: 256, 512, 1024, 2048, 4096
+container_cpu = 1024
+
+# Memory in MB. Valid combinations with CPU:
+# CPU 256: 512, 1024, 2048
+# CPU 512: 1024, 2048, 3072, 4096
+# CPU 1024: 2048, 3072, 4096, 5120, 6144, 7168, 8192
+# CPU 2048: 4096 to 16384 (1GB increments)
+# CPU 4096: 8192 to 30720 (1GB increments)
+container_memory = 2048
+
+# ECS Service scaling configuration
+desired_count = 2  # Number of tasks to run
+min_capacity  = 1  # Minimum tasks for auto-scaling
+max_capacity  = 10 # Maximum tasks for auto-scaling
+
+# ========================================
+# Database Configuration
+# ========================================
+
+# RDS instance type
+# Options: db.t3.micro (free tier), db.t3.small, db.t3.medium, db.t3.large, etc.
+db_instance_class = "db.t3.small"
+
+# Initial storage allocation in GB
+db_allocated_storage = 20
+
+# Maximum storage for auto-scaling in GB (set to 0 to disable)
+# Recommended: 100+ for production
+db_max_allocated_storage = 100
+
+# Multi-AZ deployment for high availability (recommended for production)
+db_multi_az = false
+
+# Enable Performance Insights (requires db.t3.medium or larger)
+enable_performance_insights = false
+
+# Enable deletion protection (highly recommended for production)
+enable_deletion_protection = false
+
+# Create a read replica for analytics/reporting queries
+db_create_read_replica = false
+
+# Read replica instance class (defaults to same as primary if empty)
+db_read_replica_instance_class = ""
+
+# Application database username (created by bastion host)
+app_db_username = "app_user"
+
+# ========================================
+# Redis/ElastiCache Configuration
+# ========================================
+
+# Redis node type
+# Options: cache.t3.micro (free tier), cache.t3.small, cache.t3.medium, etc.
+redis_node_type = "cache.t3.micro"
+
+# Number of cache nodes (1 for development, 2+ for production with replication)
+redis_num_cache_nodes = 1
+
+# ========================================
+# Network Configuration
+# ========================================
+
+# VPC CIDR block - use different ranges for different environments
+# Staging:    10.0.0.0/16
+# Production: 10.1.0.0/16
+vpc_cidr = "10.0.0.0/16"
+
+# ========================================
+# OPTIONAL: Bastion Host Configuration
+# ========================================
+
+# Enable bastion host for secure database access
+enable_bastion = false
+
+# EC2 key pair name (must be created in AWS first)
+ec2_key_name = ""
+
+# Bastion instance type (t3.nano is usually sufficient)
+bastion_instance_type = "t3.nano"
+
+# IP addresses allowed to SSH to bastion (CIDR format)
+# Example: ["203.0.113.0/32", "198.51.100.0/24"]
+bastion_allowed_ips = []
+
+# ========================================
+# OPTIONAL: Client VPN Configuration
+# ========================================
+# AWS Client VPN provides secure remote access to your VPC
+
+# Enable Client VPN endpoint
+enable_client_vpn = false
+
+# CIDR block for VPN clients (must not overlap with VPC CIDR)
+vpn_client_cidr_block = "10.4.0.0/22"
+
+# DNS servers for VPN clients (VPC resolver is at VPC_CIDR +2)
+vpn_dns_servers = ["10.0.0.2"]
+
+# Split tunnel (only route VPC traffic through VPN)
+vpn_split_tunnel = true
+
+# SAML provider ARN for authentication (must be created in IAM first)
+# Leave empty to use certificate-based authentication instead
+vpn_saml_provider_arn = ""
+
+# Enable VPN connection logging
+vpn_connection_log_enabled = false
+vpn_cloudwatch_log_group   = "/AWSVPN"
+vpn_cloudwatch_log_stream  = "VPNAccess"
+
+# VPN login banner
+vpn_login_banner_enabled = true
+vpn_login_banner_text    = "Authorized Access Only"
+
+# Additional CIDR blocks to authorize for VPN access
+vpn_additional_authorized_cidrs = []
+
+# ========================================
+# OPTIONAL: Meilisearch Configuration
+# ========================================
+
+# Enable Meilisearch search engine
+enable_meilisearch = true
+
+# ========================================
+# OPTIONAL: Email (SES) Configuration
+# ========================================
+
+# Enable AWS SES for sending emails
+enable_ses = true
+
+# Test email addresses (required when SES is in sandbox mode)
+ses_test_emails = []
+
+# ========================================
+# OPTIONAL: Monitoring Configuration
+# ========================================
+
+# Enable CloudTrail for API audit logging
+enable_cloudtrail = true
+
+# CloudWatch log retention in days
+log_retention_days = 7 # Production: 30+
+
+# Email addresses for health check alerts
+healthcheck_alarm_emails = []
+
+# Enable ALB access logs (useful for WAF triage and debugging)
+enable_alb_access_logs = false
+
+# ========================================
+# OPTIONAL: Error Tracking (Sentry)
+# ========================================
+
+# Sentry DSN for error tracking (leave empty to disable)
+sentry_dsn = ""
+
+# ========================================
+# OPTIONAL: Additional Environment Variables
+# ========================================
+# Add custom static environment variables here without creating new Terraform variables.
+# These will be merged with the dynamic ones computed by the infrastructure.
+
+additional_environment_variables = [
+  # Laravel Configuration
+  { name = "APP_DEBUG", value = "false" },
+  { name = "DEBUGBAR_ENABLED", value = "false" },
+
+  # Cache & Session
+  { name = "CACHE_STORE", value = "redis" },
+  { name = "SESSION_DRIVER", value = "redis" },
+  { name = "SESSION_LIFETIME", value = "120" },
+  { name = "SESSION_ENCRYPT", value = "false" },
+  { name = "SESSION_PATH", value = "/" },
+  { name = "SESSION_DOMAIN", value = "" },
+  { name = "SESSION_SECURE_COOKIE", value = "true" },
+  { name = "SESSION_SAME_SITE", value = "strict" },
+  { name = "REDIS_CLIENT", value = "phpredis" },
+
+  # Queue
+  { name = "QUEUE_CONNECTION", value = "sqs" },
+  { name = "QUEUE_FAILED_DRIVER", value = "database-uuids" },
+
+  # Logging
+  { name = "LOG_CHANNEL", value = "stack" },
+
+  # Database
+  { name = "DB_CONNECTION", value = "mysql" },
+  { name = "DB_PORT", value = "3306" },
+
+  # AWS/S3
+  { name = "AWS_USE_PATH_STYLE_ENDPOINT", value = "false" },
+
+  # Mail
+  { name = "MAIL_MAILER", value = "ses" },
+
+  # Storage/Logging
+  { name = "FILESYSTEM_DISK", value = "s3" },
+  { name = "FILAMENT_FILESYSTEM_DISK", value = "s3" },
+  { name = "LOG_STACK", value = "daily,sentry" },
+
+  # Monitoring
+  { name = "PULSE_ENABLED", value = "true" },
+
+  # Add your custom environment variables here:
+  # { name = "CUSTOM_FEATURE_FLAG", value = "enabled" },
+]
+
+# ========================================
+# OPTIONAL: Resource Tagging
+# ========================================
+
+# Cost center for resource tagging and cost allocation
+cost_center = "Engineering"
+
+# KMS key deletion window in days (7-30)
+kms_deletion_window = 7

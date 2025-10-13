@@ -1,0 +1,88 @@
+# Composer
+composer.phar
+/vendor
+/vendor-src
+# auth.json
+
+# NPM
+/node_modules
+npm-debug.log
+yarn-error.log
+
+# Sass
+.sass-cache/
+*.css.map
+*.sass.map
+*.scss.map
+
+# Laravel
+/public/build
+/public/hot
+/public/storage
+/public/*.er
+/public/*.sql
+/storage/*.key
+/storage/pail
+.env
+.env.backup
+.env.staging
+.env.production
+Homestead.json
+Homestead.yaml
+
+# PHPUnit
+.phpunit.result.cache
+
+# Tinkerwell
+.phpactor.json
+
+# ray
+/ray.php
+
+# Vemto
+/.vemto
+
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+.history/
+*.vsix
+
+# PhpStorm
+.idea/
+.phpstorm.meta.php
+
+# IDE Helper
+_ide_helper.php
+_ide_helper_models.php
+
+# macOS
+.DS_Store
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+$RECYCLE.BIN/
+[Dd]esktop.ini
+*.lnk
+
+# Misc
+*.bak
+*.tmp
+*.pem
+
+# AI
+.cursorrules
+.grok
+.claude
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+/.nova

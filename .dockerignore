@@ -1,0 +1,68 @@
+# Git
+.git
+.github
+.gitignore
+.gitattributes
+
+# Test files
+tests/
+phpunit.xml
+.phpunit.result.cache
+pest.xml
+
+# NPM
+node_modules/
+yarn.lock
+
+# Development files
+.env*
+!.env.example
+*.log
+npm-debug.log
+yarn-error.log
+.phpunit.result.cache
+Homestead.json
+Homestead.yaml
+.claude
+.husky
+
+# Storage and cache
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/framework/testing/*
+bootstrap/cache/*
+storage/app/*
+
+# Documentation
+*.md
+README.md
+CHANGELOG.md
+instructions
+
+# Build artifacts
+public/build
+public/hot
+public/storage
+
+# IDE files
+*.swp
+*.swo
+*~
+.vscode
+.idea
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+
+# Infrastructure
+terraform/
+infrastructure/
+docker-compose.yml
+
+# Coverage
+.nyc_output
+coverage
