@@ -52,7 +52,7 @@ jobs:
           LATEST_TAG=$(git --no-pager tag -l "${PREFIX}[0-9]*" --sort=-v:refname | head -n 1)
 
           if [ -z "$LATEST_TAG" ]; then
-            # No tags exist, start with VERSION.0
+            # No tags exist, start with YYYY.MM.0
             VERSION="${PREFIX}0"
           else
             TAG_PATCH=$(echo "$LATEST_TAG" | awk -F. '{print $3}' | sed 's/[^0-9].*$//')
