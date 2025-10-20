@@ -211,13 +211,12 @@ resource "aws_ecs_service" "main" {
   }
 
   # Deployment configuration to minimize ENI requirements during rolling updates
-  deployment_configuration {
-    deployment_minimum_healthy_percent = 50
-    deployment_maximum_percent         = 100
-    deployment_circuit_breaker {
-      enable   = true
-      rollback = true
-    }
+  deployment_minimum_healthy_percent = 50
+  deployment_maximum_percent         = 100
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
   }
 
   # Give Laravel time to boot before health checks start

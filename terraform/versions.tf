@@ -15,7 +15,7 @@ terraform {
   # Uses Terraform workspaces for environment isolation
   backend "s3" {
     bucket               = "${var.app_name}-terraform-state-bucket"
-    key                  = "laravel/terraform.tfstate"
+    key                  = "${var.app_name}/terraform.tfstate"
     workspace_key_prefix = "env"
     region               = "us-east-1"
     encrypt              = true
