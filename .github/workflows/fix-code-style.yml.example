@@ -1,0 +1,60 @@
+name: Fix Code Style
+
+on:
+  schedule:
+    - cron: "0 5 * * *"  # 05:00 UTC
+
+permissions:
+  contents: write
+
+env:
+  HUSKY: 0
+
+jobs:
+  fix-code-style:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        php: [8.4]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: json, dom, curl, libxml, mbstring
+          tools: pint
+
+      - name: Install Composer dependencies
+        uses: ramsey/composer-install@v3
+        env:
+          COMPOSER_AUTH: '{"github-oauth": {"github.com": "${{ secrets.COMPOSER_AUTH }}"}}'
+          CACHE_STORE: array
+
+      - name: Setup NodeJS
+        uses: actions/setup-node@v2
+
+      - name: Install NodeJS dependencies
+        run: npm ci
+
+      - name: Run Pint
+        run: composer pint
+
+      - name: Run Prettier
+        run: npm run prettier
+
+      - name: Commit linted files
+        uses: stefanzweifel/git-auto-commit-action@v6
+        with:
+          commit_message: "chore: fix code style [skip ci]"
+          file_pattern: "*.php *.js *.css *.json *.yml"
+          commit_user_name: "github-actions[bot]"
+          commit_user_email: "41898282+github-actions[bot]@users.noreply.github.com"
+          commit_author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
