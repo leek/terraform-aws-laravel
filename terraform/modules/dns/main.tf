@@ -28,6 +28,19 @@ resource "aws_route53_record" "wildcard" {
   }
 }
 
+# WWW subdomain A record (for www to non-www redirect)
+resource "aws_route53_record" "www" {
+  zone_id = var.route53_zone_id
+  name    = "www.${var.domain_name}"
+  type    = "A"
+
+  alias {
+    name                   = var.alb_dns_name
+    zone_id                = var.alb_zone_id
+    evaluate_target_health = true
+  }
+}
+
 # DMARC record (only created if dmarc_record is set)
 resource "aws_route53_record" "dmarc" {
   count   = var.dmarc_record != "" ? 1 : 0

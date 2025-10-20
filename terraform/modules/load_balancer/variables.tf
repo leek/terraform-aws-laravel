@@ -13,6 +13,11 @@ variable "aws_region" {
   type        = string
 }
 
+variable "domain_name" {
+  description = "Primary domain name for the application"
+  type        = string
+}
+
 variable "vpc_id" {
   description = "VPC ID"
   type        = string
