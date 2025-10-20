@@ -345,14 +345,14 @@ resource "aws_iam_role_policy" "github_actions_policy" {
           "s3:PutObject",
           "s3:DeleteObject"
         ]
-        Resource = "arn:aws:s3:::laravel-terraform-state-bucket/*"
+        Resource = "arn:aws:s3:::${var.app_name}-terraform-state-bucket/*"
       },
       {
         Effect = "Allow"
         Action = [
           "s3:ListBucket"
         ]
-        Resource = "arn:aws:s3:::laravel-terraform-state-bucket"
+        Resource = "arn:aws:s3:::${var.app_name}-terraform-state-bucket"
       },
       {
         Effect = "Allow"
@@ -361,7 +361,7 @@ resource "aws_iam_role_policy" "github_actions_policy" {
           "dynamodb:PutItem",
           "dynamodb:DeleteItem"
         ]
-        Resource = "arn:aws:dynamodb:${var.aws_region}:${var.caller_identity_account_id}:table/laravel-terraform-locks"
+        Resource = "arn:aws:dynamodb:${var.aws_region}:${var.caller_identity_account_id}:table/${var.app_name}-terraform-locks"
       },
       {
         Effect = "Allow"
@@ -395,8 +395,8 @@ resource "aws_iam_role_policy" "github_actions_policy" {
           "s3:*"
         ]
         Resource = [
-          "arn:aws:s3:::laravel-*",
-          "arn:aws:s3:::laravel-*/*"
+          "arn:aws:s3:::${var.app_name}-*",
+          "arn:aws:s3:::${var.app_name}-*/*"
         ]
       },
       {
@@ -416,10 +416,10 @@ resource "aws_iam_role_policy" "github_actions_policy" {
 
 # IAM user for Laravel application with same permissions as ECS task role
 resource "aws_iam_user" "laravel_app_user" {
-  name = "${var.app_name}-${var.environment}-laravel-user"
+  name = "${var.app_name}-${var.environment}-${var.app_name}-user"
 
   tags = merge(var.common_tags, {
-    Name = "${var.app_name}-${var.environment}-laravel-user"
+    Name = "${var.app_name}-${var.environment}-${var.app_name}-user"
   })
 }
 
@@ -430,7 +430,7 @@ resource "aws_iam_access_key" "laravel_app_user" {
 
 # Attach the same policy as ECS task role to Laravel user
 resource "aws_iam_user_policy" "laravel_app_user_policy" {
-  name = "${var.app_name}-${var.environment}-laravel-user-policy"
+  name = "${var.app_name}-${var.environment}-${var.app_name}-user-policy"
   user = aws_iam_user.laravel_app_user.name
 
   policy = jsonencode({

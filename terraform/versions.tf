@@ -14,12 +14,12 @@ terraform {
   # S3 backend for state management
   # Uses Terraform workspaces for environment isolation
   backend "s3" {
-    bucket               = "laravel-terraform-state-bucket"
+    bucket               = "${var.app_name}-terraform-state-bucket"
     key                  = "laravel/terraform.tfstate"
     workspace_key_prefix = "env"
     region               = "us-east-1"
     encrypt              = true
-    # dynamodb_table       = "laravel-terraform-locks"
+    # dynamodb_table       = "${var.app_name}-terraform-locks"
   }
 }
 
