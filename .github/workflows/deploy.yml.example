@@ -1,0 +1,322 @@
+name: Deploy to AWS ECS
+
+on:
+  push:
+    branches:
+      - staging
+      - uat
+      - production
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: us-east-1
+  HUSKY: 0
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine environment
+        id: env
+        run: |
+          if [[ ${{ github.ref }} == 'refs/heads/production' ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+          elif [[ ${{ github.ref }} == 'refs/heads/staging' ]]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+          else
+            echo "environment=staging" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate version (production only)
+        if: steps.env.outputs.environment == 'production'
+        id: version
+        run: |
+          CURRENT_YEAR=$(date +%Y)
+          CURRENT_MONTH=$(date +%m)
+
+          # Get latest tag for current YYYY.MM.*
+          PREFIX="${CURRENT_YEAR}.${CURRENT_MONTH}."
+          LATEST_TAG=$(git --no-pager tag -l "${PREFIX}[0-9]*" --sort=-v:refname | head -n 1)
+
+          if [ -z "$LATEST_TAG" ]; then
+            # No tags exist, start with VERSION.0
+            VERSION="${PREFIX}0"
+          else
+            TAG_PATCH=$(echo "$LATEST_TAG" | awk -F. '{print $3}' | sed 's/[^0-9].*$//')
+            NEXT_PATCH=$(( ${TAG_PATCH:-0} + 1 ))
+            VERSION="${PREFIX}${NEXT_PATCH}"
+          fi
+
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Generated version: $VERSION"
+
+          # Write version to VERSION file for the application to read
+          echo "$VERSION" > VERSION
+          echo "Created VERSION file with version: $VERSION"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          version: latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/laravel-${{ steps.env.outputs.environment }}:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/laravel-${{ steps.env.outputs.environment }}:latest
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to AWS ECS
+        run: |
+          echo "🚀 Deploying to AWS ECS..."
+          aws ecs update-service --cluster laravel-${{ steps.env.outputs.environment }} --service laravel-${{ steps.env.outputs.environment }}-service --force-new-deployment
+
+      - name: Wait for ECS service to stabilize
+        timeout-minutes: 10
+        env:
+          ENVIRONMENT: ${{ steps.env.outputs.environment }}
+        run: |
+          set +e  # Don't exit on error, we want to capture diagnostics
+
+          echo "⏳ Waiting for ECS service to stabilize..."
+          aws ecs wait services-stable --cluster laravel-$ENVIRONMENT --services laravel-$ENVIRONMENT-service
+          WAIT_EXIT_CODE=$?
+
+          if [ $WAIT_EXIT_CODE -ne 0 ]; then
+            echo "❌ Service failed to stabilize. Gathering diagnostics..."
+            echo ""
+
+            # Get service details
+            echo "📊 Service Status:"
+            aws ecs describe-services \
+              --cluster laravel-$ENVIRONMENT \
+              --services laravel-$ENVIRONMENT-service \
+              --query 'services[0].{Status:status,Running:runningCount,Desired:desiredCount,Pending:pendingCount,Deployments:deployments[*].{Status:rolloutState,Running:runningCount,Desired:desiredCount}}' \
+              --output table
+
+            echo ""
+            echo "🔍 Recent Task Failures:"
+
+            # Get stopped tasks from the last 30 minutes
+            STOPPED_TASKS=$(aws ecs list-tasks \
+              --cluster laravel-$ENVIRONMENT \
+              --service-name laravel-$ENVIRONMENT-service \
+              --desired-status STOPPED \
+              --query 'taskArns[0:5]' \
+              --output text)
+
+            if [ -n "$STOPPED_TASKS" ]; then
+              for TASK_ARN in $STOPPED_TASKS; do
+                echo ""
+                echo "Task: $(basename $TASK_ARN)"
+
+                # Get task details including stop reason
+                aws ecs describe-tasks \
+                  --cluster laravel-$ENVIRONMENT \
+                  --tasks "$TASK_ARN" \
+                  --query 'tasks[0].{StoppedReason:stoppedReason,StopCode:stopCode,LastStatus:lastStatus,Containers:containers[*].{Name:name,ExitCode:exitCode,Reason:reason}}' \
+                  --output json | jq -r '
+                    "  Stopped Reason: \(.StoppedReason // "N/A")",
+                    "  Stop Code: \(.StopCode // "N/A")",
+                    "  Last Status: \(.LastStatus // "N/A")",
+                    "  Containers:",
+                    (.Containers[] | "    - \(.Name): exit=\(.ExitCode // "N/A"), reason=\(.Reason // "none")")
+                  '
+
+                # Get CloudWatch logs for this task (last 20 lines)
+                TASK_ID=$(basename $TASK_ARN)
+                LOG_STREAM="ecs/app/$TASK_ID"
+
+                echo "  Recent Logs (last 20 lines):"
+                aws logs get-log-events \
+                  --log-group-name "/aws/ecs/laravel-$ENVIRONMENT" \
+                  --log-stream-name "$LOG_STREAM" \
+                  --limit 20 \
+                  --query 'events[*].message' \
+                  --output text 2>/dev/null | sed 's/^/    /' || echo "    (no logs available)"
+
+                echo "  ---"
+              done
+            else
+              echo "  No stopped tasks found"
+            fi
+
+            echo ""
+            echo "💡 Check the AWS Console for more details: https://console.aws.amazon.com/ecs/v2/clusters/laravel-$ENVIRONMENT/services/laravel-$ENVIRONMENT-service/health"
+
+            exit $WAIT_EXIT_CODE
+          fi
+
+          echo "✅ Service stabilized successfully"
+
+      - name: Run post-deploy Laravel commands
+        timeout-minutes: 20
+        env:
+          CLUSTER: laravel-${{ steps.env.outputs.environment }}
+          SERVICE: laravel-${{ steps.env.outputs.environment }}-service
+        run: |
+          set -euo pipefail
+
+          # Ensure jq is available (Ubuntu runners usually have it, but just in case)
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update -y && sudo apt-get install -y jq
+          fi
+
+          echo "🔎 Describe service ${SERVICE} on ${CLUSTER}"
+          SVC_JSON=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --output json)
+          if [ "$(echo "$SVC_JSON" | jq -r '.services | length')" -eq 0 ]; then
+            echo "Service not found"; exit 1
+          fi
+
+          TD_ARN=$(echo "$SVC_JSON" | jq -r '.services[0].taskDefinition')
+          echo "🔧 Task definition: $TD_ARN"
+
+          # Network config (awsvpc) is taken from the service, if present
+          SUBNETS_JSON=$(echo "$SVC_JSON" | jq -c '.services[0].networkConfiguration.awsvpcConfiguration.subnets // empty')
+          SGRPS_JSON=$(echo "$SVC_JSON" | jq -c '.services[0].networkConfiguration.awsvpcConfiguration.securityGroups // empty')
+          ASSIGN_PUBLIC_IP=$(echo "$SVC_JSON" | jq -r '.services[0].networkConfiguration.awsvpcConfiguration.assignPublicIp // empty')
+
+          NETCFG_ARG=""
+          if [ -n "${SUBNETS_JSON:-}" ] && [ -n "${SGRPS_JSON:-}" ] && [ -n "${ASSIGN_PUBLIC_IP:-}" ]; then
+            NETCFG_ARG="--network-configuration awsvpcConfiguration={subnets=${SUBNETS_JSON},securityGroups=${SGRPS_JSON},assignPublicIp=${ASSIGN_PUBLIC_IP}}"
+            echo "🌐 Using service awsvpc network configuration"
+          else
+            echo "🌐 No awsvpc network config on service; assuming EC2/bridge host networking"
+          fi
+
+          # Capacity providers vs launch type
+          CP_JSON=$(echo "$SVC_JSON" | jq -c '.services[0].capacityProviderStrategy // []')
+          CP_ARG=""
+          LT_ARG=""
+          if [ "$(echo "$CP_JSON" | jq 'length')" -gt 0 ]; then
+            # Build --capacity-provider-strategy arg list
+            CP_ARG="--capacity-provider-strategy"
+            while read -r line; do
+              CP_ARG="$CP_ARG $line"
+            done < <(echo "$CP_JSON" | jq -r '.[] | "capacityProvider=\(.capacityProvider),weight=\(.weight // 1),base=\(.base // 0)"')
+            echo "⚖️  Using service capacity provider strategy"
+          else
+            echo "🔎 Describe task definition to infer launch type"
+            TD_JSON=$(aws ecs describe-task-definition --task-definition "$TD_ARN" --include TAGS --output json)
+            if echo "$TD_JSON" | jq -e '.taskDefinition.requiresCompatibilities[] | select(.=="FARGATE")' >/dev/null; then
+              LT_ARG="--launch-type FARGATE"
+              echo "🚢 Using launch type: FARGATE"
+            else
+              LT_ARG="--launch-type EC2"
+              echo "🚢 Using launch type: EC2"
+            fi
+          fi
+
+          # Pick a container name (default to first container in TD)
+          if [ -z "${TD_JSON+x}" ]; then
+            TD_JSON=$(aws ecs describe-task-definition --task-definition "$TD_ARN" --include TAGS --output json)
+          fi
+          CONTAINER_NAME=$(echo "$TD_JSON" | jq -r '.taskDefinition.containerDefinitions[0].name')
+          echo "📦 Container to run: ${CONTAINER_NAME}"
+
+          # Build the overrides to run Laravel post-deploy commands
+          cat > overrides.json <<JSON
+          {
+            "containerOverrides": [{
+              "name": "${CONTAINER_NAME}",
+              "command": [
+                "sh","-lc",
+                "php artisan down && php artisan migrate --force && php artisan config:cache && php artisan event:cache && php artisan route:cache && php artisan view:cache && php artisan icons:cache && php artisan filament:cache-components && php artisan up"
+              ]
+            }]
+          }
+          JSON
+
+          echo "🚚 ecs run-task ..."
+          # shellcheck disable=SC2086
+          RUN_ARN=$(aws ecs run-task \
+            --cluster "$CLUSTER" \
+            --task-definition "$TD_ARN" \
+            ${CP_ARG:-} \
+            ${LT_ARG:-} \
+            ${NETCFG_ARG:-} \
+            --overrides file://overrides.json \
+            --query 'tasks[0].taskArn' \
+            --output text)
+
+          if [ -z "$RUN_ARN" ] || [ "$RUN_ARN" = "None" ]; then
+            echo "❌ Failed to start one-off task"; exit 1
+          fi
+          echo "🆔 Started task: $RUN_ARN"
+
+          echo "⏳ Waiting for task to stop..."
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$RUN_ARN"
+
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster "$CLUSTER" \
+            --tasks "$RUN_ARN" \
+            --query 'tasks[0].containers[?name==`'"$CONTAINER_NAME"'`].exitCode | [0]' \
+            --output text)
+
+          echo "Task exit code: $EXIT_CODE"
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "❌ Post-deploy commands failed"; exit "$EXIT_CODE"
+          fi
+          echo "✅ Post-deploy commands completed"
+
+      - name: Create GitHub Release (production only)
+        if: steps.env.outputs.environment == 'production'
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.version.outputs.version }}
+          name: Release ${{ steps.version.outputs.version }}
+          body: |
+            ## Deployment Information
+            - **Environment**: Production
+            - **Commit**: ${{ github.sha }}
+            - **Deployed by**: @${{ github.actor }}
+            - **Deployment Date**: ${{ github.event.head_commit.timestamp }}
+
+            ## Changes
+            ${{ github.event.head_commit.message }}
+          draft: false
+          prerelease: false
+          makeLatest: true
+          generateReleaseNotes: true
+          allowUpdates: true
+
+      - name: Create Sentry release
+        uses: getsentry/action-release@v3
+        continue-on-error: true
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        with:
+          environment: ${{ steps.env.outputs.environment }}
+          release: ${{ steps.env.outputs.environment == 'production' && steps.version.outputs.version || github.sha }}
+          disable_telemetry: true

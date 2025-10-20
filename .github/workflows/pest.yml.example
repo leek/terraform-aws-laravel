@@ -1,0 +1,68 @@
+name: Pest
+
+on:
+  pull_request:
+
+env:
+  HUSKY: 0
+
+jobs:
+  pest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        php: [8.4]
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: secret
+          MYSQL_DATABASE: laravel
+        ports:
+          - 3307:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+
+      - name: Install Composer dependencies
+        uses: ramsey/composer-install@v3
+        env:
+          COMPOSER_AUTH: '{"github-oauth": {"github.com": "${{ secrets.COMPOSER_AUTH }}"}}'
+          CACHE_STORE: array
+
+      - name: Setup NodeJS
+        uses: actions/setup-node@v2
+
+      - name: Install NodeJS dependencies
+        run: |
+          npm ci
+          npm run build
+
+      - name: Prepare Application
+        env:
+          CACHE_STORE: array
+        run: |
+          php artisan config:clear
+          cp .env.example .env
+          php artisan key:generate
+          php artisan storage:link
+
+      - name: Run Pest
+        env:
+          DB_PASSWORD: secret
+          DB_PORT: 3307
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+        run: |
+          php artisan migrate --force
+          php artisan test --parallel

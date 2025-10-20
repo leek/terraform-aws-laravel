@@ -1,0 +1,117 @@
+name: Create Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_override:
+        description: 'Override version (leave empty for auto-generation using YYYY.MM.PATCH format)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest tag
+        id: latest_tag
+        run: |
+          # Get the latest tag, if any
+          LATEST_TAG=$(git --no-pager tag -l --sort=-v:refname | head -n 1)
+          echo "latest_tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
+
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No existing tags found"
+            echo "has_tags=false" >> $GITHUB_OUTPUT
+          else
+            echo "Latest tag: $LATEST_TAG"
+            echo "has_tags=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Calculate next version
+        id: version
+        run: |
+          CURRENT_YEAR=$(date +%Y)
+          CURRENT_MONTH=$(date +%m)
+
+          # Check if user provided an override
+          if [ -n "${{ inputs.version_override }}" ]; then
+            VERSION="${{ inputs.version_override }}"
+            echo "Using override version: $VERSION"
+          else
+            LATEST_TAG="${{ steps.latest_tag.outputs.latest_tag }}"
+
+            if [ -z "$LATEST_TAG" ]; then
+              # No tags exist, start with VERSION.0
+              VERSION="${CURRENT_YEAR}.${CURRENT_MONTH}.0"
+            else
+              # Parse the latest tag (expected format: YYYY.MM.PATCH)
+              TAG_YEAR=$(echo $LATEST_TAG | cut -d. -f1)
+              TAG_MONTH=$(echo $LATEST_TAG | cut -d. -f2)
+              TAG_PATCH=$(echo $LATEST_TAG | cut -d. -f3)
+
+              # Check if we're in a new month/year
+              if [ "$TAG_YEAR" != "$CURRENT_YEAR" ] || [ "$TAG_MONTH" != "$CURRENT_MONTH" ]; then
+                # New month or year, reset patch to 0
+                VERSION="${CURRENT_YEAR}.${CURRENT_MONTH}.0"
+              else
+                # Same month, increment patch
+                NEXT_PATCH=$((TAG_PATCH + 1))
+                VERSION="${CURRENT_YEAR}.${CURRENT_MONTH}.${NEXT_PATCH}"
+              fi
+            fi
+          fi
+
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Next version: $VERSION"
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          LATEST_TAG="${{ steps.latest_tag.outputs.latest_tag }}"
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Create a temporary file for release notes
+          NOTES_FILE=$(mktemp)
+
+          echo "## What's Changed" > $NOTES_FILE
+          echo "" >> $NOTES_FILE
+
+          if [ -n "$LATEST_TAG" ]; then
+            # Get commits since last tag
+            git log ${LATEST_TAG}..HEAD --pretty=format:"* %s (%h)" >> $NOTES_FILE
+          else
+            # Get last 20 commits
+            git log -20 --pretty=format:"* %s (%h)" >> $NOTES_FILE
+          fi
+
+          echo "" >> $NOTES_FILE
+          echo "" >> $NOTES_FILE
+          if [ -n "$LATEST_TAG" ]; then
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${LATEST_TAG}...${VERSION}" >> $NOTES_FILE
+          else
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/commits/${VERSION}" >> $NOTES_FILE
+          fi
+
+          # Output the notes file path
+          echo "notes_file=${NOTES_FILE}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.version.outputs.version }}
+          name: Release ${{ steps.version.outputs.version }}
+          bodyFile: ${{ steps.release_notes.outputs.notes_file }}
+          draft: false
+          prerelease: false
+          makeLatest: true
+          generateReleaseNotes: true

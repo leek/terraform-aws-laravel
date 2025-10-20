@@ -1,0 +1,148 @@
+name: Update Changelog
+
+on:
+  release:
+    types: [released]
+
+permissions:
+  contents: write
+
+jobs:
+  update-changelog:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: production
+          fetch-depth: 0
+
+      - name: Update CHANGELOG.md
+        run: |
+          set -e
+
+          VERSION="${{ github.event.release.tag_name }}"
+          RELEASE_DATE=$(date +%Y-%m-%d)
+          RELEASE_NOTES="${{ github.event.release.body }}"
+
+          echo "📝 Updating CHANGELOG.md for version ${VERSION}"
+
+          # Create a temporary file for the updated changelog
+          TMP_FILE=$(mktemp)
+
+          # Extract unreleased content
+          UNRELEASED_CONTENT=$(awk '
+            /^## \[Unreleased\]/ { in_unreleased=1; next }
+            /^## / { in_unreleased=0 }
+            in_unreleased && NF { print }
+          ' CHANGELOG.md | sed '/^---$/,$d')
+
+          # Process release notes from GitHub
+          # Remove the deployment information section and extract just the changes
+          GITHUB_NOTES=$(echo "$RELEASE_NOTES" | awk '
+            BEGIN { in_changes=0; in_deployment=0 }
+            /^## Deployment Information/ { in_deployment=1; next }
+            /^## Changes/ { in_changes=1; next }
+            /^## What/ { in_changes=1; next }
+            /^##/ { in_changes=0; in_deployment=0; next }
+            /^\*\*Full Changelog\*\*/ { next }
+            in_changes && /^[*-]/ { print }
+            !in_deployment && !in_changes && /^[*-]/ { print }
+          ')
+
+          # Combine unreleased content and GitHub notes (no deduplication)
+          echo "📝 Merging unreleased items with GitHub release notes..."
+          
+          COMBINED_CONTENT="${UNRELEASED_CONTENT}"
+          
+          # Add GitHub notes if there are any
+          if [ -n "$GITHUB_NOTES" ]; then
+            if [ -n "$COMBINED_CONTENT" ]; then
+              COMBINED_CONTENT="${COMBINED_CONTENT}"$'\n\n'"### GitHub Release Notes"
+            else
+              COMBINED_CONTENT="### GitHub Release Notes"
+            fi
+            
+            # Convert * to - for consistency
+            while IFS= read -r line; do
+              if [[ -n "$line" && "$line" =~ ^[*-] ]]; then
+                formatted_line=$(echo "$line" | sed 's/^\* /- /')
+                COMBINED_CONTENT="${COMBINED_CONTENT}"$'\n'"${formatted_line}"
+              fi
+            done <<< "$GITHUB_NOTES"
+          fi
+
+          # Build the new release section
+          NEW_RELEASE_SECTION="## [${VERSION}] - ${RELEASE_DATE}"
+
+          # Write the updated changelog
+          {
+            # Keep everything before [Unreleased] section
+            awk '/^## \[Unreleased\]/ {exit} {print}' CHANGELOG.md
+
+            # Write Unreleased section (now empty)
+            echo "## [Unreleased]"
+            echo ""
+
+            # Add a separator
+            echo "---"
+            echo ""
+
+            # Write the new release section
+            echo "$NEW_RELEASE_SECTION"
+            echo ""
+
+            # Write combined content
+            if [ -n "$COMBINED_CONTENT" ]; then
+              echo "$COMBINED_CONTENT"
+            else
+              echo "No changes recorded."
+            fi
+
+            echo ""
+
+            # Add link to full changelog
+            PREV_VERSION=$(git --no-pager tag -l --sort=-v:refname | grep -v "^${VERSION}$" | head -n 1)
+            if [ -n "$PREV_VERSION" ]; then
+              echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_VERSION}...${VERSION}"
+            else
+              echo "**Full Changelog**: https://github.com/${{ github.repository }}/commits/${VERSION}"
+            fi
+
+            echo ""
+            echo "---"
+            echo ""
+
+            # Keep everything after the first --- in the original file
+            awk '
+              BEGIN { found_separator=0 }
+              /^---$/ {
+                if (!found_separator) {
+                  found_separator=1
+                  next
+                }
+              }
+              found_separator { print }
+            ' CHANGELOG.md
+
+          } > "$TMP_FILE"
+
+          # Replace the original file
+          mv "$TMP_FILE" CHANGELOG.md
+
+          echo "✅ CHANGELOG.md updated successfully"
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if git diff --quiet CHANGELOG.md; then
+            echo "No changes to commit"
+          else
+            git add CHANGELOG.md
+            git commit -m "Update CHANGELOG for release ${{ github.event.release.tag_name }}"
+            git push origin production
+            echo "✅ Changes committed and pushed"
+          fi
