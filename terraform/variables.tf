@@ -11,7 +11,7 @@ variable "aws_region" {
 variable "app_name" {
   description = "Application name"
   type        = string
-  default     = "${var.app_name}-app"
+  default     = "laravel-app"
 }
 
 variable "app_key" {
