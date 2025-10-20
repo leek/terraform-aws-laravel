@@ -69,6 +69,7 @@ terraform.rc
 # ========================================
 *.tfplan
 *tfplan*
+plan.out
 
 # ========================================
 # SSH Keys and Certificates

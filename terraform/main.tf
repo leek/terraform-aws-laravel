@@ -181,6 +181,7 @@ module "load_balancer" {
   app_name              = var.app_name
   environment           = var.environment
   aws_region            = var.aws_region
+  domain_name           = var.domain_name
   vpc_id                = module.networking.vpc_id
   public_subnets        = module.networking.public_subnets
   alb_security_group_id = module.networking.alb_security_group_id

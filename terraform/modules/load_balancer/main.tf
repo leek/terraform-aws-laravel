@@ -35,8 +35,8 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "CommonRuleSetMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "CommonRuleSetMetric"
+      sampled_requests_enabled   = true
     }
   }
 
@@ -58,8 +58,8 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "KnownBadInputsRuleSetMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "KnownBadInputsRuleSetMetric"
+      sampled_requests_enabled   = true
     }
   }
 
@@ -81,8 +81,8 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "AmazonIpReputationListMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "AmazonIpReputationListMetric"
+      sampled_requests_enabled   = true
     }
   }
 
@@ -104,8 +104,8 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "BotControlRuleSetMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "BotControlRuleSetMetric"
+      sampled_requests_enabled   = true
     }
   }
 
@@ -127,15 +127,15 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "RateLimitRule"
-      sampled_requests_enabled    = true
+      metric_name                = "RateLimitRule"
+      sampled_requests_enabled   = true
     }
   }
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                 = "${var.app_name}-${var.environment}-waf"
-    sampled_requests_enabled    = true
+    metric_name                = "${var.app_name}-${var.environment}-waf"
+    sampled_requests_enabled   = true
   }
 
   tags = merge(var.common_tags, {
@@ -146,6 +146,10 @@ resource "aws_wafv2_web_acl" "main" {
 # ========================================
 # Application Load Balancer
 # ========================================
+
+locals {
+  domain_starts_with_www = startswith(lower(var.domain_name), "www.")
+}
 
 resource "aws_lb" "main" {
   name               = "${var.app_name}-${var.environment}-alb"
@@ -178,7 +182,7 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    interval            = 30
+    interval            = 15
     matcher             = "200"
     path                = "/health"
     port                = "traffic-port"
@@ -187,7 +191,7 @@ resource "aws_lb_target_group" "main" {
     unhealthy_threshold = 2
   }
 
-  deregistration_delay = 30
+  deregistration_delay = 15
 
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-${var.environment}-tg"
@@ -227,6 +231,34 @@ resource "aws_lb_listener" "https" {
   }
 
   depends_on = [aws_lb_target_group.main]
+  tags       = var.common_tags
+}
+
+# HTTPS Listener Rule - Redirect www to non-www
+resource "aws_lb_listener_rule" "redirect_www" {
+  count        = local.domain_starts_with_www ? 0 : 1
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 1
+
+  action {
+    type = "redirect"
+
+    redirect {
+      host        = var.domain_name
+      port        = "443"
+      protocol    = "HTTPS"
+      path        = "/#{path}"
+      query       = "#{query}"
+      status_code = "HTTP_301"
+    }
+  }
+
+  condition {
+    host_header {
+      values = ["www.${var.domain_name}"]
+    }
+  }
+
   tags = var.common_tags
 }
 

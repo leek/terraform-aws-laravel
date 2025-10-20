@@ -345,14 +345,14 @@ resource "aws_iam_role_policy" "github_actions_policy" {
           "s3:PutObject",
           "s3:DeleteObject"
         ]
-        Resource = "arn:aws:s3:::${var.app_name}-terraform-state-bucket/*"
+        Resource = "arn:aws:s3:::laravel-terraform-state-bucket/*"
       },
       {
         Effect = "Allow"
         Action = [
           "s3:ListBucket"
         ]
-        Resource = "arn:aws:s3:::${var.app_name}-terraform-state-bucket"
+        Resource = "arn:aws:s3:::laravel-terraform-state-bucket"
       },
       {
         Effect = "Allow"
@@ -361,7 +361,7 @@ resource "aws_iam_role_policy" "github_actions_policy" {
           "dynamodb:PutItem",
           "dynamodb:DeleteItem"
         ]
-        Resource = "arn:aws:dynamodb:${var.aws_region}:${var.caller_identity_account_id}:table/${var.app_name}-terraform-locks"
+        Resource = "arn:aws:dynamodb:${var.aws_region}:${var.caller_identity_account_id}:table/laravel-terraform-locks"
       },
       {
         Effect = "Allow"
@@ -395,8 +395,8 @@ resource "aws_iam_role_policy" "github_actions_policy" {
           "s3:*"
         ]
         Resource = [
-          "arn:aws:s3:::${var.app_name}-*",
-          "arn:aws:s3:::${var.app_name}-*/*"
+          "arn:aws:s3:::laravel-*",
+          "arn:aws:s3:::laravel-*/*"
         ]
       },
       {
