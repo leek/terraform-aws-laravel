@@ -121,9 +121,9 @@ variable "enable_detailed_monitoring" {
 }
 
 variable "ebs_optimized" {
-  description = "Enable EBS optimization for the bastion instance (not supported for t3.nano by default)"
+  description = "Enable EBS optimization for the bastion instance (set to false for t3.nano/t3.micro if needed)"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "root_block_device_encrypted" {
