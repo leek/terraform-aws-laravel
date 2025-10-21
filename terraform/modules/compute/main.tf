@@ -3,8 +3,7 @@
 # ========================================
 
 module "ecs" {
-  source  = "terraform-aws-modules/ecs/aws"
-  version = "~> 5.0"
+  source = "git::https://github.com/terraform-aws-modules/terraform-aws-ecs.git?ref=3b70e1e46e1b96a2da7fbfe6e2c11d44009607f1" # v5.11.4
 
   cluster_name = "${var.app_name}-${var.environment}"
 

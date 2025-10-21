@@ -113,3 +113,27 @@ variable "rds_kms_key_arn" {
   type        = string
   default     = ""
 }
+
+variable "enable_detailed_monitoring" {
+  description = "Enable detailed monitoring for the bastion instance"
+  type        = bool
+  default     = true
+}
+
+variable "ebs_optimized" {
+  description = "Enable EBS optimization for the bastion instance (not supported for t3.nano by default)"
+  type        = bool
+  default     = false
+}
+
+variable "root_block_device_encrypted" {
+  description = "Enable encryption for the root block device"
+  type        = bool
+  default     = true
+}
+
+variable "root_block_device_kms_key_id" {
+  description = "KMS key ID to use for root block device encryption"
+  type        = string
+  default     = ""
+}
