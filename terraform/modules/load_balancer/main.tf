@@ -158,7 +158,8 @@ resource "aws_lb" "main" {
   security_groups    = [var.alb_security_group_id]
   subnets            = var.public_subnets
 
-  enable_deletion_protection = false
+  enable_deletion_protection = var.enable_deletion_protection
+  drop_invalid_header_fields = var.drop_invalid_header_fields
 
   access_logs {
     bucket  = var.alb_logs_bucket_name

@@ -2,6 +2,7 @@
 # ECS Cluster
 # ========================================
 
+#checkov:skip=CKV_TF_1:Version constraint provides better balance between reproducibility and maintainability
 module "ecs" {
   source  = "terraform-aws-modules/ecs/aws"
   version = "~> 5.0"

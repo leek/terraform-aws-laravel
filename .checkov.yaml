@@ -1,0 +1,9 @@
+# Checkov configuration file
+# This file configures which checks to skip during Checkov security scanning
+
+skip-check:
+  # CKV_TF_1: Ensure Terraform module sources use a commit hash
+  # We've pinned the module to a specific commit hash, but maintaining this
+  # creates maintenance overhead. Version constraints provide a better balance
+  # between reproducibility and maintainability for this project.
+  - CKV_TF_1

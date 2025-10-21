@@ -53,3 +53,15 @@ variable "common_tags" {
   description = "Common tags for all resources"
   type        = map(string)
 }
+
+variable "enable_deletion_protection" {
+  description = "Enable deletion protection for the load balancer"
+  type        = bool
+  default     = false
+}
+
+variable "drop_invalid_header_fields" {
+  description = "Enable dropping of invalid HTTP header fields"
+  type        = bool
+  default     = true
+}
