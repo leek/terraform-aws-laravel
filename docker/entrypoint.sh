@@ -24,8 +24,12 @@ fi
 # Ensure storage directories have proper permissions
 echo "Setting storage directory permissions..."
 mkdir -p /var/www/html/storage/logs
-mkdir -p /var/www/html/storage/framework/{cache,sessions,views}
-mkdir -p /var/www/html/storage/app/{public,private}
+mkdir -p /var/www/html/storage/framework/cache
+mkdir -p /var/www/html/storage/framework/sessions
+mkdir -p /var/www/html/storage/framework/testing
+mkdir -p /var/www/html/storage/framework/views
+mkdir -p /var/www/html/storage/app/public
+mkdir -p /var/www/html/storage/app/private
 chown -R www-data:www-data /var/www/html/storage
 chown -R www-data:www-data /var/www/html/bootstrap/cache
 chmod -R 775 /var/www/html/storage
