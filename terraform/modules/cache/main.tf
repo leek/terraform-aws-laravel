@@ -35,6 +35,10 @@ resource "aws_elasticache_cluster" "redis" {
   subnet_group_name    = aws_elasticache_subnet_group.redis.name
   security_group_ids   = [var.redis_security_group_id]
 
+  # Enable automatic backups for data protection
+  snapshot_retention_limit = var.snapshot_retention_limit
+  snapshot_window          = var.snapshot_window
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-${var.environment}-redis"
   })

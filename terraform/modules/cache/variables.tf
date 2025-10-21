@@ -28,3 +28,15 @@ variable "common_tags" {
   description = "Common tags for all resources"
   type        = map(string)
 }
+
+variable "snapshot_retention_limit" {
+  description = "Number of days to retain Redis snapshots (0 to disable backups)"
+  type        = number
+  default     = 5
+}
+
+variable "snapshot_window" {
+  description = "Daily time range for Redis snapshots (UTC)"
+  type        = string
+  default     = "03:00-05:00"
+}
