@@ -15,6 +15,10 @@ permissions:
   contents: write
   pull-requests: write
 
+concurrency:
+  group: update-changelog-${{ github.ref || 'manual' }}
+  cancel-in-progress: false
+
 jobs:
   update-changelog:
     if: >
@@ -36,10 +40,17 @@ jobs:
             const tag   = core.getInput('tag_name');
 
             let release;
-            if (tag) {
-              release = (await github.rest.repos.getReleaseByTag({ owner, repo, tag })).data;
-            } else {
-              release = (await github.rest.repos.getLatestRelease({ owner, repo })).data;
+            try {
+              if (tag) {
+                release = (await github.rest.repos.getReleaseByTag({ owner, repo, tag })).data;
+              } else {
+                release = (await github.rest.repos.getLatestRelease({ owner, repo })).data;
+              }
+            } catch (e) {
+              core.warning(`No release found (${e.status || ''}). Skipping changelog update.`);
+              core.setOutput('tag', '');
+              core.setOutput('body', '');
+              return;
             }
 
             core.setOutput('tag', release.tag_name || '');
@@ -57,6 +68,8 @@ jobs:
           if [ ! -f CHANGELOG.md ]; then
             printf '# Changelog\n\n## [Unreleased]\n\n---\n\n' > CHANGELOG.md
           fi
+          # Ensure LF endings for parsing
+          sed -i 's/\r$//' CHANGELOG.md
 
       - name: Update CHANGELOG.md
         env:
