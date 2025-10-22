@@ -40,5 +40,17 @@ chmod -R 775 /var/www/html/bootstrap/cache
 echo "Caching Laravel configuration..."
 php artisan config:cache --no-interaction || true
 
-# Start supervisord
-exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
+# Select the appropriate supervisord configuration based on container role
+CONTAINER_ROLE=${CONTAINER_ROLE:-web}
+SUPERVISORD_CONF="/etc/supervisor/supervisord-${CONTAINER_ROLE}.conf"
+
+echo "Starting container in ${CONTAINER_ROLE} mode..."
+
+if [ ! -f "$SUPERVISORD_CONF" ]; then
+    echo "ERROR: Supervisord configuration not found: $SUPERVISORD_CONF"
+    echo "Valid roles are: web, queue-worker, scheduler"
+    exit 1
+fi
+
+# Start supervisord with the role-specific configuration
+exec /usr/bin/supervisord -c "$SUPERVISORD_CONF"

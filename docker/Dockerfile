@@ -139,10 +139,11 @@ COPY docker/.profile /root/.profile
 COPY --chown=www-data:www-data docker/nginx/ /etc/nginx
 COPY docker/php/php-fpm.conf /usr/local/etc/php-fpm.d/www.conf
 COPY docker/php/php.ini /usr/local/etc/php/conf.d/99-custom.ini
-COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-COPY docker/supervisord-web.conf /etc/supervisor/conf.d/supervisord-web.conf
-COPY docker/supervisord-queue-worker.conf /etc/supervisor/conf.d/supervisord-queue-worker.conf
-COPY docker/supervisord-scheduler.conf /etc/supervisor/conf.d/supervisord-scheduler.conf
+# Copy supervisor configurations (role-specific, selected at runtime via CONTAINER_ROLE env var)
+COPY docker/supervisord.conf /etc/supervisor/supervisord.conf
+COPY docker/supervisord-web.conf /etc/supervisor/supervisord-web.conf
+COPY docker/supervisord-queue-worker.conf /etc/supervisor/supervisord-queue-worker.conf
+COPY docker/supervisord-scheduler.conf /etc/supervisor/supervisord-scheduler.conf
 COPY docker/entrypoint.sh /entrypoint.sh
 
 # Make entrypoint executable and create supervisor log directory
