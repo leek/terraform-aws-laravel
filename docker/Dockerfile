@@ -94,36 +94,45 @@ RUN apk add --no-cache \
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Copy dependency files
-COPY composer.json composer.lock auth.json* package.json package-lock.json ./
+# Copy Composer dependency files
+COPY composer.json composer.lock auth.json* ./
+COPY vendor-src/ ./vendor-src/
+COPY patches/ ./patches/
+
+# Install PHP dependencies with cache mounts
+RUN --mount=type=cache,target=/root/.composer/cache \
+    composer install --no-scripts --optimize-autoloader --no-interaction --prefer-dist --no-ansi --no-progress
+
+# Copy NPM dependency files
+COPY package.json package-lock.json ./
+
+# Install NPM dependencies with cache mounts
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci && \
+    npm cache clean --force
 
 # Copy the rest of the application files
 COPY . .
 
-# Install PHP and Node dependencies with cache mounts
-RUN --mount=type=cache,target=/root/.composer/cache \
-    composer install --no-scripts --optimize-autoloader --no-interaction --prefer-dist && \
-    composer clear-cache
-
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci && \
-    npm cache clean --force && \
-    npm run build
+# Build assets
+RUN npm run build && \
+    rm -rf node_modules
 
 # Create minimal .env for build-time caching (will be replaced at runtime)
 # We need APP_KEY and basic config for artisan commands to work
 # Override CACHE_STORE to avoid database connections during build
 RUN cp .env.example .env && \
-    CACHE_STORE=array php artisan key:generate --no-interaction --force
+    (CACHE_STORE=array php artisan key:generate --no-interaction --force --no-ansi || true)
 
 # Cache Laravel artifacts at build time (except config which depends on env vars)
 # This significantly speeds up container startup time
-# Use CACHE_STORE=array to avoid database connections during build
-RUN CACHE_STORE=array php artisan event:cache --no-interaction && \
-    CACHE_STORE=array php artisan route:cache --no-interaction && \
-    CACHE_STORE=array php artisan view:cache --no-interaction && \
-    CACHE_STORE=array php artisan icons:cache --no-interaction && \
-    CACHE_STORE=array php artisan filament:cache-components --no-interaction
+# Override CACHE_STORE to avoid database connections during build
+# Set memory_limit for resource-intensive caching operations
+RUN CACHE_STORE=array php -d memory_limit=512M artisan event:cache --no-interaction --no-ansi && \
+    CACHE_STORE=array php -d memory_limit=512M artisan route:cache --no-interaction --no-ansi && \
+    CACHE_STORE=array php -d memory_limit=512M artisan view:cache --no-interaction --no-ansi && \
+    CACHE_STORE=array php -d memory_limit=512M artisan icons:cache --no-interaction --no-ansi && \
+    CACHE_STORE=array php -d memory_limit=512M artisan filament:cache-components --no-interaction --no-ansi
 
 # ========================================
 # Stage 3: Final application image
@@ -149,11 +158,10 @@ COPY docker/entrypoint.sh /entrypoint.sh
 
 # Make entrypoint executable and create supervisor log directory
 RUN chmod +x /entrypoint.sh \
-    && mkdir -p /var/log/supervisor \
-    && mkdir -p /var/www/html/storage /var/www/html/bootstrap/cache \
-    && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
-    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache \
-    && chown -R www-data:www-data /etc/nginx/custom.d \
+    && mkdir -p /var/log/supervisor /etc/nginx/custom.d \
+    && mkdir -p storage bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache /etc/nginx \
+    && chmod -R 775 storage bootstrap/cache \
     && mkdir -p /var/lib/nginx/tmp/client_body \
     /var/lib/nginx/tmp/proxy \
     /var/lib/nginx/tmp/fastcgi \
