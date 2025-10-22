@@ -11,7 +11,7 @@ locals {
     Repository  = var.github_repo
     ManagedBy   = "Terraform"
     CostCenter  = var.cost_center
-    Project     = "Apollo"
+    Project     = "Laravel"
     CreatedBy   = "Terraform"
   }
 
