@@ -86,3 +86,5 @@ $RECYCLE.BIN/
 *.tfstate
 *.tfstate.*
 /.nova
+terraform/.terraform.lock.hcl
+*.zip
