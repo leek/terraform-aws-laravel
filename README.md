@@ -9,6 +9,9 @@ Production-ready AWS infrastructure for Laravel applications using Terraform. Th
 
 ### Core Infrastructure
 - **ECS Fargate** - Containerized Laravel application with auto-scaling
+  - Web service (handles HTTP traffic via ALB)
+  - Queue worker service (processes SQS queue jobs)
+  - Scheduler service (runs Laravel task scheduler)
 - **RDS MySQL** - Managed database with automated backups
 - **ElastiCache Redis** - Session and cache storage (single-node configuration)
 - **Application Load Balancer** - HTTPS traffic routing with AWS WAF
@@ -34,6 +37,11 @@ Production-ready AWS infrastructure for Laravel applications using Terraform. Th
 
 ## Architecture
 
+The infrastructure deploys three separate ECS services:
+1. **Web Service** - Handles HTTP/HTTPS traffic through the ALB (auto-scales based on traffic)
+2. **Queue Worker Service** - Processes Laravel queue jobs from SQS (always runs 1 task)
+3. **Scheduler Service** - Runs Laravel's task scheduler (`php artisan schedule:work`) (always runs 1 task)
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                         Internet                             │
@@ -47,26 +55,27 @@ Production-ready AWS infrastructure for Laravel applications using Terraform. Th
          │  Application Load Balancer (+ WAF)   │
          └──────────────────┬───────────────────┘
                             │
-    ┌───────────────────────┴───────────────────────┐
-    │              ECS Fargate Cluster              │
-    │  ┌────────────┐  ┌────────────┐               │
-    │  │ Laravel    │  │ Laravel    │  (Auto-scale) │
-    │  │ Container  │  │ Container  │               │
-    │  └────────────┘  └────────────┘               │
-    └───────┬─────────────────┬─────────────────────┘
-            │                 │
-    ┌───────▼────────┐  ┌─────▼─────────────┐
-    │ ElastiCache    │  │  RDS MySQL        │
-    │ Redis          │  │  (+ Read Replica) │
-    └────────────────┘  └───────────────────┘
-            │                 │
-            │           ┌─────▼──────┐
-            │           │  Bastion   │ (Optional)
-            │           └────────────┘
-            │
-    ┌───────▼─────────────────────────────────┐
-    │  S3 (Filesystem) + SQS (Queues)         │
-    └─────────────────────────────────────────┘
+    ┌───────────────────────┴────────────────────────────┐
+    │              ECS Fargate Cluster                   │
+    │  ┌────────────┐  ┌──────────┐  ┌──────────┐       │
+    │  │  Web       │  │ Queue    │  │Scheduler │       │
+    │  │ Service    │  │ Worker   │  │ Service  │       │
+    │  │(Auto-scale)│  │ Service  │  │ (1 task) │       │
+    │  └────────────┘  └──────────┘  └──────────┘       │
+    └───────┬──────────────┬──────────────┬──────────────┘
+            │              │              │
+    ┌───────▼────────┐  ┌──▼──────────┐  │
+    │ ElastiCache    │  │  RDS MySQL  │  │
+    │ Redis          │  │ (+ Replica) │  │
+    └────────────────┘  └─────────────┘  │
+            │                 │           │
+            │           ┌─────▼──────┐    │
+            │           │  Bastion   │    │
+            │           └────────────┘    │
+            │                             │
+    ┌───────▼─────────────────────────────▼──────┐
+    │  S3 (Filesystem) + SQS (Queues)            │
+    └────────────────────────────────────────────┘
 ```
 
 ## Prerequisites
@@ -135,8 +144,11 @@ aws ecr get-login-password | docker login --username AWS --password-stdin $(terr
 docker tag myapp:latest $(terraform output -raw ecr_repository_url):latest
 docker push $(terraform output -raw ecr_repository_url):latest
 
-# Force new ECS deployment
-aws ecs update-service --cluster laravel-app-production --service laravel-app-production-service --force-new-deployment
+# Force new ECS deployment (updates all three services: web, queue-worker, scheduler)
+CLUSTER=$(terraform output -raw ecs_cluster_name)
+aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_service_name) --force-new-deployment
+aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_queue_worker_service_name) --force-new-deployment
+aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_scheduler_service_name) --force-new-deployment
 ```
 
 ## Configuration Guide
@@ -519,7 +531,7 @@ terraform/
     ├── cache/                  # ElastiCache Redis
     ├── certificates/           # ACM SSL certificates
     ├── client_vpn/             # AWS Client VPN (optional)
-    ├── compute/                # ECS Fargate cluster
+    ├── compute/                # ECS Fargate cluster (web + queue-worker + scheduler)
     ├── configuration/          # SSM parameters
     ├── container_registry/     # ECR repository
     ├── database/               # RDS MySQL
@@ -533,6 +545,16 @@ terraform/
     ├── security/               # IAM + KMS
     └── storage/                # S3 buckets
 ```
+
+### ECS Services
+
+The compute module deploys three ECS services:
+
+- **Web Service**: Handles HTTP/HTTPS requests via the Application Load Balancer. Auto-scales based on CPU and memory utilization.
+- **Queue Worker Service**: Processes Laravel queue jobs from SQS. Runs continuously with 1 task by default.
+- **Scheduler Service**: Runs Laravel's task scheduler (`php artisan schedule:work`). Runs continuously with 1 task.
+
+All three services share the same Docker image from ECR but run different commands based on their role.
 
 ## Support & Contributing
 

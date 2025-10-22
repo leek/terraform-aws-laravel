@@ -100,8 +100,23 @@ output "ecs_cluster_name" {
 }
 
 output "ecs_service_name" {
-  description = "Name of the ECS service"
+  description = "Name of the ECS web service"
   value       = module.compute.service_name
+}
+
+output "ecs_queue_worker_service_name" {
+  description = "Name of the queue worker ECS service"
+  value       = module.compute.queue_worker_service_name
+}
+
+output "ecs_scheduler_service_name" {
+  description = "Name of the scheduler ECS service"
+  value       = module.compute.scheduler_service_name
+}
+
+output "ecs_worker_services" {
+  description = "Map of all worker service names (queue-worker, scheduler)"
+  value       = module.compute.worker_services
 }
 
 output "ecs_session_manager_command" {
