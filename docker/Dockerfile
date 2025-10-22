@@ -96,8 +96,11 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Copy Composer dependency files
 COPY composer.json composer.lock auth.json* ./
-COPY vendor-src/ ./vendor-src/
-COPY patches/ ./patches/
+
+# Copy optional vendor-src and patches directories if they exist
+RUN --mount=type=bind,source=.,target=/src \
+    if [ -d /src/vendor-src ]; then cp -a /src/vendor-src ./vendor-src; fi && \
+    if [ -d /src/patches ]; then cp -a /src/patches ./patches; fi
 
 # Install PHP dependencies with cache mounts
 RUN --mount=type=cache,target=/root/.composer/cache \
