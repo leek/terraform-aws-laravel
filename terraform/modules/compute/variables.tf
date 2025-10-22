@@ -73,34 +73,82 @@ variable "caller_identity_account_id" {
   type        = string
 }
 
+# ========================================
+# Web Service Configuration
+# ========================================
+
 variable "container_cpu" {
-  description = "CPU units for the container"
+  description = "CPU units for the web service container (256 = 0.25 vCPU, 512 = 0.5 vCPU, 1024 = 1 vCPU)"
   type        = number
   default     = 512
 }
 
 variable "container_memory" {
-  description = "Memory for the container"
+  description = "Memory (MB) for the web service container"
   type        = number
   default     = 1024
 }
 
 variable "desired_count" {
-  description = "Desired number of tasks"
+  description = "Desired number of web service tasks"
   type        = number
   default     = 2
 }
 
 variable "min_capacity" {
-  description = "Minimum capacity for auto scaling"
+  description = "Minimum capacity for web service auto scaling"
   type        = number
   default     = 1
 }
 
 variable "max_capacity" {
-  description = "Maximum capacity for auto scaling"
+  description = "Maximum capacity for web service auto scaling"
   type        = number
   default     = 10
+}
+
+# ========================================
+# Queue Worker Configuration
+# ========================================
+
+variable "queue_worker_cpu" {
+  description = "CPU units for the queue worker container (256 = 0.25 vCPU, 512 = 0.5 vCPU, 1024 = 1 vCPU)"
+  type        = number
+  default     = 512
+}
+
+variable "queue_worker_memory" {
+  description = "Memory (MB) for the queue worker container"
+  type        = number
+  default     = 1024
+}
+
+variable "queue_worker_desired_count" {
+  description = "Desired number of queue worker tasks"
+  type        = number
+  default     = 1
+}
+
+# ========================================
+# Scheduler Configuration
+# ========================================
+
+variable "scheduler_cpu" {
+  description = "CPU units for the scheduler container (256 = 0.25 vCPU, 512 = 0.5 vCPU)"
+  type        = number
+  default     = 256
+}
+
+variable "scheduler_memory" {
+  description = "Memory (MB) for the scheduler container"
+  type        = number
+  default     = 512
+}
+
+variable "scheduler_desired_count" {
+  description = "Desired number of scheduler tasks (typically 1)"
+  type        = number
+  default     = 1
 }
 
 variable "meilisearch_host" {

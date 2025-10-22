@@ -71,34 +71,73 @@ variable "meilisearch_master_key" {
 # Container Configuration
 # ========================================
 
+# Web Service (handles HTTP requests)
 variable "container_cpu" {
-  description = "CPU units for the container (1024 = 1 vCPU)"
+  description = "CPU units for the web service container (256 = 0.25 vCPU, 512 = 0.5 vCPU, 1024 = 1 vCPU)"
   type        = number
   default     = 512
 }
 
 variable "container_memory" {
-  description = "Memory for the container in MB"
+  description = "Memory for the web service container in MB"
   type        = number
   default     = 1024
 }
 
 variable "desired_count" {
-  description = "Desired number of tasks"
+  description = "Desired number of web service tasks"
   type        = number
   default     = 2
 }
 
 variable "min_capacity" {
-  description = "Minimum number of tasks"
+  description = "Minimum number of web service tasks for auto scaling"
   type        = number
   default     = 1
 }
 
 variable "max_capacity" {
-  description = "Maximum number of tasks"
+  description = "Maximum number of web service tasks for auto scaling"
   type        = number
   default     = 10
+}
+
+# Queue Worker (processes background jobs)
+variable "queue_worker_cpu" {
+  description = "CPU units for the queue worker container (256 = 0.25 vCPU, 512 = 0.5 vCPU, 1024 = 1 vCPU)"
+  type        = number
+  default     = 512
+}
+
+variable "queue_worker_memory" {
+  description = "Memory for the queue worker container in MB"
+  type        = number
+  default     = 1024
+}
+
+variable "queue_worker_desired_count" {
+  description = "Desired number of queue worker tasks"
+  type        = number
+  default     = 1
+}
+
+# Scheduler (runs Laravel's cron/scheduled tasks)
+variable "scheduler_cpu" {
+  description = "CPU units for the scheduler container (256 = 0.25 vCPU, 512 = 0.5 vCPU)"
+  type        = number
+  default     = 256
+}
+
+variable "scheduler_memory" {
+  description = "Memory for the scheduler container in MB"
+  type        = number
+  default     = 512
+}
+
+variable "scheduler_desired_count" {
+  description = "Desired number of scheduler tasks (typically 1)"
+  type        = number
+  default     = 1
 }
 
 # ========================================
