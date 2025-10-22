@@ -23,7 +23,7 @@ This separation ensures:
 
 ```bash
 # Build the container
-docker build -f docker/Dockerfile -t apollo-local .
+docker build -f docker/Dockerfile -t laravel-local .
 
 # Run web server locally
 docker run -p 8080:80 \
