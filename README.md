@@ -9,8 +9,11 @@ Production-ready AWS infrastructure for Laravel applications using Terraform. Th
 
 ### Core Infrastructure
 - **ECS Fargate** - Containerized Laravel application with auto-scaling
+  - Web service (handles HTTP traffic via ALB)
+  - Queue worker service (processes SQS queue jobs)
+  - Scheduler service (runs Laravel task scheduler)
 - **RDS MySQL** - Managed database with automated backups
-- **ElastiCache Redis** - Session and cache storage
+- **ElastiCache Redis** - Session and cache storage (single-node configuration)
 - **Application Load Balancer** - HTTPS traffic routing with AWS WAF
 - **S3** - File storage for Laravel filesystem
 - **SQS** - Queue management for Laravel jobs
@@ -30,9 +33,14 @@ Production-ready AWS infrastructure for Laravel applications using Terraform. Th
 - **VPC isolation** - Private subnets for application and database
 - **IAM roles** - Least-privilege access controls
 - **Security groups** - Network-level firewalling
-- **SSL/TLS** - HTTPS everywhere with ACM certificates
+- **SSL/TLS** - HTTPS everywhere with ACM certificates (includes VPN server certificates)
 
 ## Architecture
+
+The infrastructure deploys three separate ECS services:
+1. **Web Service** - Handles HTTP/HTTPS traffic through the ALB (auto-scales based on traffic)
+2. **Queue Worker Service** - Processes Laravel queue jobs from SQS (always runs 1 task)
+3. **Scheduler Service** - Runs Laravel's task scheduler (`php artisan schedule:work`) (always runs 1 task)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -47,26 +55,27 @@ Production-ready AWS infrastructure for Laravel applications using Terraform. Th
          │  Application Load Balancer (+ WAF)   │
          └──────────────────┬───────────────────┘
                             │
-    ┌───────────────────────┴───────────────────────┐
-    │              ECS Fargate Cluster              │
-    │  ┌────────────┐  ┌────────────┐               │
-    │  │ Laravel    │  │ Laravel    │  (Auto-scale) │
-    │  │ Container  │  │ Container  │               │
-    │  └────────────┘  └────────────┘               │
-    └───────┬─────────────────┬─────────────────────┘
-            │                 │
-    ┌───────▼────────┐  ┌─────▼─────────────┐
-    │ ElastiCache    │  │  RDS MySQL        │
-    │ Redis          │  │  (+ Read Replica) │
-    └────────────────┘  └───────────────────┘
-            │                 │
-            │           ┌─────▼──────┐
-            │           │  Bastion   │ (Optional)
-            │           └────────────┘
-            │
-    ┌───────▼─────────────────────────────────┐
-    │  S3 (Filesystem) + SQS (Queues)         │
-    └─────────────────────────────────────────┘
+    ┌───────────────────────┴────────────────────────────┐
+    │              ECS Fargate Cluster                   │
+    │  ┌────────────┐  ┌──────────┐  ┌──────────┐       │
+    │  │  Web       │  │ Queue    │  │Scheduler │       │
+    │  │ Service    │  │ Worker   │  │ Service  │       │
+    │  │(Auto-scale)│  │ Service  │  │ (1 task) │       │
+    │  └────────────┘  └──────────┘  └──────────┘       │
+    └───────┬──────────────┬──────────────┬──────────────┘
+            │              │              │
+    ┌───────▼────────┐  ┌──▼──────────┐  │
+    │ ElastiCache    │  │  RDS MySQL  │  │
+    │ Redis          │  │ (+ Replica) │  │
+    └────────────────┘  └─────────────┘  │
+            │                 │           │
+            │           ┌─────▼──────┐    │
+            │           │  Bastion   │    │
+            │           └────────────┘    │
+            │                             │
+    ┌───────▼─────────────────────────────▼──────┐
+    │  S3 (Filesystem) + SQS (Queues)            │
+    └────────────────────────────────────────────┘
 ```
 
 ## Prerequisites
@@ -103,7 +112,7 @@ app_key     = "base64:YOUR_APP_KEY_HERE"
 github_org  = "your-org"
 github_repo = "your-repo"
 
-# Database credentials
+# Database credentials (use strong random passwords)
 app_db_password       = "STRONG_RANDOM_PASSWORD"
 db_reporting_password = "STRONG_RANDOM_PASSWORD"
 ```
@@ -135,8 +144,11 @@ aws ecr get-login-password | docker login --username AWS --password-stdin $(terr
 docker tag myapp:latest $(terraform output -raw ecr_repository_url):latest
 docker push $(terraform output -raw ecr_repository_url):latest
 
-# Force new ECS deployment
-aws ecs update-service --cluster laravel-app-production --service laravel-app-production-service --force-new-deployment
+# Force new ECS deployment (updates all three services: web, queue-worker, scheduler)
+CLUSTER=$(terraform output -raw ecs_cluster_name)
+aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_service_name) --force-new-deployment
+aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_queue_worker_service_name) --force-new-deployment
+aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_scheduler_service_name) --force-new-deployment
 ```
 
 ## Configuration Guide
@@ -149,6 +161,8 @@ For a basic setup (good for staging/development):
 environment = "staging"
 domain_name = "staging.example.com"
 app_key     = "base64:..."
+github_org  = "your-org"
+github_repo = "your-repo"
 
 app_db_password       = "..."
 db_reporting_password = "..."
@@ -156,6 +170,10 @@ db_reporting_password = "..."
 # Small instance sizes
 container_cpu        = 512
 container_memory     = 1024
+desired_count        = 1
+min_capacity         = 1
+max_capacity         = 4
+
 db_instance_class    = "db.t3.micro"
 redis_node_type      = "cache.t3.micro"
 
@@ -177,6 +195,8 @@ For production with high availability:
 environment = "production"
 domain_name = "example.com"
 app_key     = "base64:..."
+github_org  = "your-org"
+github_repo = "your-repo"
 
 app_db_password       = "..."
 db_reporting_password = "..."
@@ -197,9 +217,8 @@ enable_performance_insights  = true
 enable_deletion_protection   = true
 db_create_read_replica       = true
 
-# Production Redis
-redis_node_type       = "cache.t3.medium"
-redis_num_cache_nodes = 2
+# Production Redis (note: currently single-node only)
+redis_node_type = "cache.t3.medium"
 
 # Enable production features
 enable_cloudtrail       = true
@@ -249,6 +268,8 @@ vpn_saml_provider_arn = "arn:aws:iam::ACCOUNT:saml-provider/YourProvider"
 ```
 
 Provides secure remote access to your VPC for development and debugging.
+
+> **Note**: VPN server certificates are automatically provisioned for all environments via ACM (even if Client VPN is disabled). This allows you to enable VPN later without additional certificate setup.
 
 ### Enable Bastion Host
 
@@ -350,6 +371,15 @@ Adjust CPU and memory per task:
 container_cpu    = 2048  # 2 vCPU
 container_memory = 4096  # 4 GB
 ```
+
+### Redis Scaling
+
+**Vertical**: Change node type:
+```hcl
+redis_node_type = "cache.t3.medium"  # or cache.r6g.large, etc.
+```
+
+> **Note**: Redis is currently configured as a single-node cluster. Multi-node replication (for high availability) is not yet implemented but can be added in the future using ElastiCache Replication Groups.
 
 ### Database Scaling
 
@@ -501,7 +531,7 @@ terraform/
     ├── cache/                  # ElastiCache Redis
     ├── certificates/           # ACM SSL certificates
     ├── client_vpn/             # AWS Client VPN (optional)
-    ├── compute/                # ECS Fargate cluster
+    ├── compute/                # ECS Fargate cluster (web + queue-worker + scheduler)
     ├── configuration/          # SSM parameters
     ├── container_registry/     # ECR repository
     ├── database/               # RDS MySQL
@@ -515,6 +545,16 @@ terraform/
     ├── security/               # IAM + KMS
     └── storage/                # S3 buckets
 ```
+
+### ECS Services
+
+The compute module deploys three ECS services:
+
+- **Web Service**: Handles HTTP/HTTPS requests via the Application Load Balancer. Auto-scales based on CPU and memory utilization.
+- **Queue Worker Service**: Processes Laravel queue jobs from SQS. Runs continuously with 1 task by default.
+- **Scheduler Service**: Runs Laravel's task scheduler (`php artisan schedule:work`). Runs continuously with 1 task.
+
+All three services share the same Docker image from ECR but run different commands based on their role.
 
 ## Support & Contributing
 
