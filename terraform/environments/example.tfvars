@@ -28,6 +28,13 @@ github_org  = "your-org"
 github_repo = "your-repo"
 
 # ========================================
+# AWS Configuration
+# ========================================
+
+# AWS region (defaults to us-east-1 if not specified)
+# aws_region = "us-east-1"
+
+# ========================================
 # REQUIRED: Database Credentials
 # ========================================
 
@@ -108,8 +115,9 @@ app_db_username = "app_user"
 # Options: cache.t3.micro (free tier), cache.t3.small, cache.t3.medium, etc.
 redis_node_type = "cache.t3.micro"
 
-# Number of cache nodes (1 for development, 2+ for production with replication)
-redis_num_cache_nodes = 1
+# Note: Redis cluster is currently configured as single-node only.
+# The num_cache_nodes parameter is not yet implemented.
+# For high availability, consider using ElastiCache Replication Groups (future enhancement).
 
 # ========================================
 # Network Configuration
@@ -270,3 +278,11 @@ cost_center = "Engineering"
 
 # KMS key deletion window in days (7-30)
 kms_deletion_window = 7
+
+# ========================================
+# OPTIONAL: DNS Configuration
+# ========================================
+
+# DMARC TXT record for email authentication (only set for production)
+# Example: "v=DMARC1; p=quarantine; rua=mailto:dmarc@yourdomain.com"
+dmarc_record = ""

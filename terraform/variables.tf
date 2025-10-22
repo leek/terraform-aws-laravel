@@ -169,11 +169,9 @@ variable "redis_node_type" {
   default     = "cache.t3.micro"
 }
 
-variable "redis_num_cache_nodes" {
-  description = "Number of cache nodes for Redis"
-  type        = number
-  default     = 1
-}
+# Note: redis_num_cache_nodes is not yet implemented. 
+# The cache module currently deploys a single-node Redis cluster.
+# For high availability, consider using ElastiCache Replication Groups (future enhancement).
 
 # ========================================
 # Network Configuration

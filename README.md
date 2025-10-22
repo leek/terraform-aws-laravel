@@ -10,7 +10,7 @@ Production-ready AWS infrastructure for Laravel applications using Terraform. Th
 ### Core Infrastructure
 - **ECS Fargate** - Containerized Laravel application with auto-scaling
 - **RDS MySQL** - Managed database with automated backups
-- **ElastiCache Redis** - Session and cache storage
+- **ElastiCache Redis** - Session and cache storage (single-node configuration)
 - **Application Load Balancer** - HTTPS traffic routing with AWS WAF
 - **S3** - File storage for Laravel filesystem
 - **SQS** - Queue management for Laravel jobs
@@ -30,7 +30,7 @@ Production-ready AWS infrastructure for Laravel applications using Terraform. Th
 - **VPC isolation** - Private subnets for application and database
 - **IAM roles** - Least-privilege access controls
 - **Security groups** - Network-level firewalling
-- **SSL/TLS** - HTTPS everywhere with ACM certificates
+- **SSL/TLS** - HTTPS everywhere with ACM certificates (includes VPN server certificates)
 
 ## Architecture
 
@@ -103,7 +103,7 @@ app_key     = "base64:YOUR_APP_KEY_HERE"
 github_org  = "your-org"
 github_repo = "your-repo"
 
-# Database credentials
+# Database credentials (use strong random passwords)
 app_db_password       = "STRONG_RANDOM_PASSWORD"
 db_reporting_password = "STRONG_RANDOM_PASSWORD"
 ```
@@ -149,6 +149,8 @@ For a basic setup (good for staging/development):
 environment = "staging"
 domain_name = "staging.example.com"
 app_key     = "base64:..."
+github_org  = "your-org"
+github_repo = "your-repo"
 
 app_db_password       = "..."
 db_reporting_password = "..."
@@ -156,6 +158,10 @@ db_reporting_password = "..."
 # Small instance sizes
 container_cpu        = 512
 container_memory     = 1024
+desired_count        = 1
+min_capacity         = 1
+max_capacity         = 4
+
 db_instance_class    = "db.t3.micro"
 redis_node_type      = "cache.t3.micro"
 
@@ -177,6 +183,8 @@ For production with high availability:
 environment = "production"
 domain_name = "example.com"
 app_key     = "base64:..."
+github_org  = "your-org"
+github_repo = "your-repo"
 
 app_db_password       = "..."
 db_reporting_password = "..."
@@ -197,9 +205,8 @@ enable_performance_insights  = true
 enable_deletion_protection   = true
 db_create_read_replica       = true
 
-# Production Redis
-redis_node_type       = "cache.t3.medium"
-redis_num_cache_nodes = 2
+# Production Redis (note: currently single-node only)
+redis_node_type = "cache.t3.medium"
 
 # Enable production features
 enable_cloudtrail       = true
@@ -249,6 +256,8 @@ vpn_saml_provider_arn = "arn:aws:iam::ACCOUNT:saml-provider/YourProvider"
 ```
 
 Provides secure remote access to your VPC for development and debugging.
+
+> **Note**: VPN server certificates are automatically provisioned for all environments via ACM (even if Client VPN is disabled). This allows you to enable VPN later without additional certificate setup.
 
 ### Enable Bastion Host
 
@@ -350,6 +359,15 @@ Adjust CPU and memory per task:
 container_cpu    = 2048  # 2 vCPU
 container_memory = 4096  # 4 GB
 ```
+
+### Redis Scaling
+
+**Vertical**: Change node type:
+```hcl
+redis_node_type = "cache.t3.medium"  # or cache.r6g.large, etc.
+```
+
+> **Note**: Redis is currently configured as a single-node cluster. Multi-node replication (for high availability) is not yet implemented but can be added in the future using ElastiCache Replication Groups.
 
 ### Database Scaling
 
