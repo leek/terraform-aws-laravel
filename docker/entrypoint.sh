@@ -35,9 +35,10 @@ chown -R www-data:www-data /var/www/html/bootstrap/cache
 chmod -R 775 /var/www/html/storage
 chmod -R 775 /var/www/html/bootstrap/cache
 
-# Optimize Laravel
-echo "Optimizing Laravel..."
-php artisan optimize --no-interaction || true
+# Cache only config (all other caches are baked into the Docker image at build time)
+# Config cache must be done at runtime because it depends on environment variables
+echo "Caching Laravel configuration..."
+php artisan config:cache --no-interaction || true
 
 # Start supervisord
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf

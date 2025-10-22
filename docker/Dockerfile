@@ -110,6 +110,19 @@ RUN --mount=type=cache,target=/root/.npm \
     npm cache clean --force && \
     npm run build
 
+# Create minimal .env for build-time caching (will be replaced at runtime)
+# We need APP_KEY and basic config for artisan commands to work
+RUN cp .env.example .env && \
+    php artisan key:generate --no-interaction --force
+
+# Cache Laravel artifacts at build time (except config which depends on env vars)
+# This significantly speeds up container startup time
+RUN php artisan event:cache --no-interaction && \
+    php artisan route:cache --no-interaction && \
+    php artisan view:cache --no-interaction && \
+    php artisan icons:cache --no-interaction && \
+    php artisan filament:cache-components --no-interaction
+
 # ========================================
 # Stage 3: Final application image
 # ========================================

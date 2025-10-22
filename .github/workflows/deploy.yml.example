@@ -244,13 +244,16 @@ jobs:
           echo "📦 Container to run: ${CONTAINER_NAME}"
 
           # Build the overrides to run Laravel post-deploy commands
+          # Note: All caches (except config) are baked into the Docker image at build time
+          # Config cache happens automatically in entrypoint.sh for all containers
+          # We only need to run migrations here during deployment
           cat > overrides.json <<JSON
           {
             "containerOverrides": [{
               "name": "${CONTAINER_NAME}",
               "command": [
                 "sh","-lc",
-                "php artisan down && php artisan migrate --force && php artisan config:cache && php artisan event:cache && php artisan route:cache && php artisan view:cache && php artisan icons:cache && php artisan filament:cache-components && php artisan up"
+                "php artisan down && php artisan migrate --force && php artisan up"
               ]
             }]
           }
