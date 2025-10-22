@@ -28,3 +28,18 @@ output "ecs_session_manager_command" {
   description = "Command to connect to ECS container via Session Manager"
   value       = "aws ecs execute-command --cluster ${module.ecs.cluster_name} --task <task-id> --container app --interactive --command '/bin/bash'"
 }
+
+output "queue_worker_service_name" {
+  description = "Name of the queue worker ECS service"
+  value       = var.enable_queue_worker ? aws_ecs_service.worker["queue-worker"].name : null
+}
+
+output "scheduler_service_name" {
+  description = "Name of the scheduler ECS service"
+  value       = var.enable_scheduler ? aws_ecs_service.worker["scheduler"].name : null
+}
+
+output "worker_services" {
+  description = "Map of all worker service names"
+  value       = { for k, v in aws_ecs_service.worker : k => v.name }
+}

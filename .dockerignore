@@ -36,9 +36,12 @@ storage/app/*
 # because we'll generate them during the Docker build and want them in the image
 
 # Documentation
-*.md
+AGENTS.md
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+CLAUDE.md
 README.md
-CHANGELOG.md
+RELEASE.md
 instructions
 
 # Build artifacts (we generate these during build)

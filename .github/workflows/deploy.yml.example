@@ -12,7 +12,17 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # ========================================
+  # Configuration
+  # ========================================
+  APP_NAME: laravel
   AWS_REGION: us-east-1
+  DOCKERFILE_PATH: docker/Dockerfile
+  ECS_SERVICES: service,queue-worker,scheduler
+
+  # ========================================
+  # Standard Configuration
+  # ========================================
   HUSKY: 0
 
 jobs:
@@ -52,7 +62,7 @@ jobs:
           LATEST_TAG=$(git --no-pager tag -l "${PREFIX}[0-9]*" --sort=-v:refname | head -n 1)
 
           if [ -z "$LATEST_TAG" ]; then
-            # No tags exist, start with YYYY.MM.0
+            # No tags exist, start with VERSION.0
             VERSION="${PREFIX}0"
           else
             TAG_PATCH=$(echo "$LATEST_TAG" | awk -F. '{print $3}' | sed 's/[^0-9].*$//')
@@ -86,50 +96,107 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: docker/Dockerfile
+          file: ${{ env.DOCKERFILE_PATH }}
           push: true
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/laravel-${{ steps.env.outputs.environment }}:${{ github.sha }}
-            ${{ steps.login-ecr.outputs.registry }}/laravel-${{ steps.env.outputs.environment }}:latest
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}:latest
           platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Deploy to AWS ECS
+        env:
+          ENVIRONMENT: ${{ steps.env.outputs.environment }}
         run: |
           echo "🚀 Deploying to AWS ECS..."
-          aws ecs update-service --cluster laravel-${{ steps.env.outputs.environment }} --service laravel-${{ steps.env.outputs.environment }}-service --force-new-deployment
+
+          # Deploy all configured services
+          IFS=',' read -ra SERVICES <<< "${{ env.ECS_SERVICES }}"
+          for SERVICE_SUFFIX in "${SERVICES[@]}"; do
+            SERVICE_NAME="${{ env.APP_NAME }}-${ENVIRONMENT}-${SERVICE_SUFFIX}"
+            echo "📦 Deploying ${SERVICE_NAME}..."
+            aws ecs update-service \
+              --cluster ${{ env.APP_NAME }}-${ENVIRONMENT} \
+              --service ${SERVICE_NAME} \
+              --force-new-deployment
+          done
 
       - name: Wait for ECS service to stabilize
-        timeout-minutes: 10
+        timeout-minutes: 15
         env:
           ENVIRONMENT: ${{ steps.env.outputs.environment }}
         run: |
           set +e  # Don't exit on error, we want to capture diagnostics
 
           echo "⏳ Waiting for ECS service to stabilize..."
-          aws ecs wait services-stable --cluster laravel-$ENVIRONMENT --services laravel-$ENVIRONMENT-service
-          WAIT_EXIT_CODE=$?
+
+          # Build service list from configuration
+          IFS=',' read -ra SERVICE_SUFFIXES <<< "${{ env.ECS_SERVICES }}"
+          SERVICES=()
+          for SUFFIX in "${SERVICE_SUFFIXES[@]}"; do
+            SERVICES+=("${{ env.APP_NAME }}-${ENVIRONMENT}-${SUFFIX}")
+          done
+
+          # Custom polling loop with configured timeout
+          MAX_ATTEMPTS=60
+          CHECK_INTERVAL=15
+          ATTEMPT=0
+          WAIT_EXIT_CODE=255
+
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+
+            ALL_STABLE=true
+            for SERVICE in "${SERVICES[@]}"; do
+              echo "⏳ Checking $SERVICE..."
+
+              DEPLOYMENTS=$(aws ecs describe-services \
+                --cluster ${{ env.APP_NAME }}-${ENVIRONMENT} \
+                --services "$SERVICE" \
+                --query 'services[0].deployments[?rolloutState==`IN_PROGRESS`] | length(@)' \
+                --output text)
+
+              if [ "$DEPLOYMENTS" != "0" ]; then
+                echo "⏳ $SERVICE: $DEPLOYMENTS deployment(s) still in progress..."
+                ALL_STABLE=false
+              fi
+            done
+
+            if [ "$ALL_STABLE" = true ]; then
+              echo "✅ All services stabilized after $ATTEMPT attempts"
+              WAIT_EXIT_CODE=0
+              break
+            fi
+
+            echo "⏳ Attempt $ATTEMPT/$MAX_ATTEMPTS..."
+            sleep ${CHECK_INTERVAL}
+          done
+
+          if [ $WAIT_EXIT_CODE -ne 0 ]; then
+            echo "⏱️ Timeout: Service did not stabilize after $MAX_ATTEMPTS attempts"
+          fi
 
           if [ $WAIT_EXIT_CODE -ne 0 ]; then
             echo "❌ Service failed to stabilize. Gathering diagnostics..."
             echo ""
 
-            # Get service details
+            # Get service details for primary service
+            PRIMARY_SERVICE="${{ env.APP_NAME }}-${ENVIRONMENT}-service"
             echo "📊 Service Status:"
             aws ecs describe-services \
-              --cluster laravel-$ENVIRONMENT \
-              --services laravel-$ENVIRONMENT-service \
+              --cluster ${{ env.APP_NAME }}-${ENVIRONMENT} \
+              --services ${PRIMARY_SERVICE} \
               --query 'services[0].{Status:status,Running:runningCount,Desired:desiredCount,Pending:pendingCount,Deployments:deployments[*].{Status:rolloutState,Running:runningCount,Desired:desiredCount}}' \
               --output table
 
             echo ""
-            echo "🔍 Recent Task Failures:"
+            echo "🔍 Recent Task Events:"
 
             # Get stopped tasks from the last 30 minutes
             STOPPED_TASKS=$(aws ecs list-tasks \
-              --cluster laravel-$ENVIRONMENT \
-              --service-name laravel-$ENVIRONMENT-service \
+              --cluster ${{ env.APP_NAME }}-${ENVIRONMENT} \
+              --service-name ${PRIMARY_SERVICE} \
               --desired-status STOPPED \
               --query 'taskArns[0:5]' \
               --output text)
@@ -140,38 +207,48 @@ jobs:
                 echo "Task: $(basename $TASK_ARN)"
 
                 # Get task details including stop reason
-                aws ecs describe-tasks \
-                  --cluster laravel-$ENVIRONMENT \
+                TASK_INFO=$(aws ecs describe-tasks \
+                  --cluster ${{ env.APP_NAME }}-${ENVIRONMENT} \
                   --tasks "$TASK_ARN" \
-                  --query 'tasks[0].{StoppedReason:stoppedReason,StopCode:stopCode,LastStatus:lastStatus,Containers:containers[*].{Name:name,ExitCode:exitCode,Reason:reason}}' \
-                  --output json | jq -r '
-                    "  Stopped Reason: \(.StoppedReason // "N/A")",
-                    "  Stop Code: \(.StopCode // "N/A")",
-                    "  Last Status: \(.LastStatus // "N/A")",
+                  --query 'tasks[0]' \
+                  --output json)
+
+                EXIT_CODE=$(echo "$TASK_INFO" | jq -r '.containers[0].exitCode // "N/A"')
+                STOP_CODE=$(echo "$TASK_INFO" | jq -r '.stopCode // "N/A"')
+
+                # Only show full details if it's an actual failure (non-zero exit or TaskFailedToStart)
+                if ([ "$EXIT_CODE" != "0" ] && [ "$EXIT_CODE" != "N/A" ]) || [ "$STOP_CODE" = "TaskFailedToStart" ]; then
+                  echo "$TASK_INFO" | jq -r '
+                    "  ❌ FAILURE - Stopped Reason: \(.stoppedReason // "N/A")",
+                    "  Stop Code: \(.stopCode // "N/A")",
+                    "  Last Status: \(.lastStatus // "N/A")",
                     "  Containers:",
-                    (.Containers[] | "    - \(.Name): exit=\(.ExitCode // "N/A"), reason=\(.Reason // "none")")
+                    (.containers[] | "    - \(.name): exit=\(.exitCode // "N/A"), reason=\(.reason // "none")")
                   '
 
-                # Get CloudWatch logs for this task (last 20 lines)
-                TASK_ID=$(basename $TASK_ARN)
-                LOG_STREAM="ecs/app/$TASK_ID"
+                  # Get CloudWatch logs for this task (last 20 lines)
+                  TASK_ID=$(basename $TASK_ARN)
+                  LOG_STREAM="ecs/app/$TASK_ID"
 
-                echo "  Recent Logs (last 20 lines):"
-                aws logs get-log-events \
-                  --log-group-name "/aws/ecs/laravel-$ENVIRONMENT" \
-                  --log-stream-name "$LOG_STREAM" \
-                  --limit 20 \
-                  --query 'events[*].message' \
-                  --output text 2>/dev/null | sed 's/^/    /' || echo "    (no logs available)"
+                  echo "  Recent Logs (last 20 lines):"
+                  aws logs get-log-events \
+                    --log-group-name "/aws/ecs/${{ env.APP_NAME }}-$ENVIRONMENT" \
+                    --log-stream-name "$LOG_STREAM" \
+                    --limit 20 \
+                    --query 'events[*].message' \
+                    --output text 2>/dev/null | sed 's/^/    /' || echo "    (no logs available)"
 
-                echo "  ---"
+                  echo "  ---"
+                else
+                  echo "  ✅ Stopped normally (exit code: $EXIT_CODE)"
+                fi
               done
             else
               echo "  No stopped tasks found"
             fi
 
             echo ""
-            echo "💡 Check the AWS Console for more details: https://console.aws.amazon.com/ecs/v2/clusters/laravel-$ENVIRONMENT/services/laravel-$ENVIRONMENT-service/health"
+            echo "💡 Check the AWS Console for more details: https://console.aws.amazon.com/ecs/v2/clusters/${{ env.APP_NAME }}-$ENVIRONMENT/services/${{ env.APP_NAME }}-$ENVIRONMENT-service/health"
 
             exit $WAIT_EXIT_CODE
           fi
@@ -181,8 +258,8 @@ jobs:
       - name: Run post-deploy Laravel commands
         timeout-minutes: 20
         env:
-          CLUSTER: laravel-${{ steps.env.outputs.environment }}
-          SERVICE: laravel-${{ steps.env.outputs.environment }}-service
+          CLUSTER: ${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}
+          SERVICE: ${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}-service
         run: |
           set -euo pipefail
 
@@ -323,3 +400,13 @@ jobs:
           environment: ${{ steps.env.outputs.environment }}
           release: ${{ steps.env.outputs.environment == 'production' && steps.version.outputs.version || github.sha }}
           disable_telemetry: true
+
+      - name: Microsoft Teams Notification
+        if: failure()
+        uses: jdcargile/ms-teams-notification@v1.4
+        continue-on-error: true
+        with:
+          github-token: ${{ github.token }}
+          ms-teams-webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URI }}
+          notification-summary: "Failed to deploy to ${{ steps.env.outputs.environment }} environment."
+          notification-color: dc3545

@@ -137,3 +137,15 @@ variable "common_tags" {
   description = "Common tags for all resources"
   type        = map(string)
 }
+
+variable "enable_queue_worker" {
+  description = "Enable the queue worker service"
+  type        = bool
+  default     = true
+}
+
+variable "enable_scheduler" {
+  description = "Enable the scheduler service"
+  type        = bool
+  default     = true
+}

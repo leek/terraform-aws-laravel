@@ -52,7 +52,7 @@ terraform.rc
 # Provider Plugins
 # ========================================
 # Include provider lock file for version pinning
-# !.terraform.lock.hcl
+!.terraform.lock.hcl
 
 # ========================================
 # IDE and Editor Files
