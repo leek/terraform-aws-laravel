@@ -53,7 +53,7 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v6
         with:
           commit_message: "chore: fix code style [skip ci]"
-          branch: main
+          branch: ${{ github.head_ref || github.ref_name }}
           file_pattern: "*.php *.js *.css *.json *.yml"
           commit_user_name: "github-actions[bot]"
           commit_user_email: "41898282+github-actions[bot]@users.noreply.github.com"

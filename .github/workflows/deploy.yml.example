@@ -217,7 +217,7 @@ jobs:
                 STOP_CODE=$(echo "$TASK_INFO" | jq -r '.stopCode // "N/A"')
 
                 # Only show full details if it's an actual failure (non-zero exit or TaskFailedToStart)
-                if [ "$EXIT_CODE" != "0" ] && [ "$EXIT_CODE" != "N/A" ] || [ "$STOP_CODE" = "TaskFailedToStart" ]; then
+                if ([ "$EXIT_CODE" != "0" ] && [ "$EXIT_CODE" != "N/A" ]) || [ "$STOP_CODE" = "TaskFailedToStart" ]; then
                   echo "$TASK_INFO" | jq -r '
                     "  ❌ FAILURE - Stopped Reason: \(.stoppedReason // "N/A")",
                     "  Stop Code: \(.stopCode // "N/A")",

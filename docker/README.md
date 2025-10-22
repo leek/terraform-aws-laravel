@@ -10,9 +10,9 @@ This Docker image supports multiple container roles via the `CONTAINER_ROLE` env
 
 The ECS deployment consists of three separate services:
 
-1. **Web Service** (`apollo-{env}-service`): Multiple tasks behind ALB for handling HTTP requests
-2. **Queue Worker Service** (`apollo-{env}-queue-worker`): Dedicated tasks for processing queue jobs
-3. **Scheduler Service** (`apollo-{env}-scheduler`): Single task for running scheduled commands
+1. **Web Service** (`{app_name}-{env}-service`): Multiple tasks behind ALB for handling HTTP requests
+2. **Queue Worker Service** (`{app_name}-{env}-queue-worker`): Dedicated tasks for processing queue jobs
+3. **Scheduler Service** (`{app_name}-{env}-scheduler`): Single task for running scheduled commands
 
 This separation ensures:
 - Queue workers don't compete with each other (no duplicate job processing)
@@ -76,11 +76,11 @@ aws ecr get-login-password --region us-east-1 | docker login --username AWS --pa
 docker build --platform linux/amd64 -f docker/Dockerfile -t apollo-staging .
 
 # Tag and push to ECR
-docker tag apollo-staging:latest $(terraform output -raw ecr_repository_url):latest
+docker tag laravel-staging:latest $(terraform output -raw ecr_repository_url):latest
 docker push $(terraform output -raw ecr_repository_url):latest
 
 # Force ECS to deploy new image (all services)
-aws ecs update-service --cluster apollo-staging --service apollo-staging-service --force-new-deployment
-aws ecs update-service --cluster apollo-staging --service apollo-staging-queue-worker --force-new-deployment
-aws ecs update-service --cluster apollo-staging --service apollo-staging-scheduler --force-new-deployment
+aws ecs update-service --cluster laravel-staging --service laravel-staging-service --force-new-deployment
+aws ecs update-service --cluster laravel-staging --service laravel-staging-queue-worker --force-new-deployment
+aws ecs update-service --cluster laravel-staging --service laravel-staging-scheduler --force-new-deployment
 ```
