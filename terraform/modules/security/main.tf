@@ -416,10 +416,10 @@ resource "aws_iam_role_policy" "github_actions_policy" {
 
 # IAM user for Laravel application with same permissions as ECS task role
 resource "aws_iam_user" "laravel_app_user" {
-  name = "${var.app_name}-${var.environment}-${var.app_name}-user"
+  name = "${var.app_name}-${var.environment}-laravel-user"
 
   tags = merge(var.common_tags, {
-    Name = "${var.app_name}-${var.environment}-${var.app_name}-user"
+    Name = "${var.app_name}-${var.environment}-laravel-user"
   })
 }
 
@@ -430,7 +430,7 @@ resource "aws_iam_access_key" "laravel_app_user" {
 
 # Attach the same policy as ECS task role to Laravel user
 resource "aws_iam_user_policy" "laravel_app_user_policy" {
-  name = "${var.app_name}-${var.environment}-${var.app_name}-user-policy"
+  name = "${var.app_name}-${var.environment}-laravel-user-policy"
   user = aws_iam_user.laravel_app_user.name
 
   policy = jsonencode({
