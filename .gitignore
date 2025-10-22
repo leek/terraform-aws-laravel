@@ -1,7 +1,6 @@
 # Composer
 composer.phar
 /vendor
-/vendor-src
 # auth.json
 
 # NPM
@@ -76,15 +75,20 @@ $RECYCLE.BIN/
 *.tmp
 *.pem
 
+# Version file (generated during deployment)
+/VERSION
+
 # AI
 .cursorrules
 .grok
-.claude
 
 # Terraform
 .terraform/
 *.tfstate
 *.tfstate.*
 /.nova
-terraform/.terraform.lock.hcl
-*.zip
+
+# Laravel Boost
+.mcp.json
+.junie/
+.claude/settings.local.json

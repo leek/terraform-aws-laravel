@@ -36,9 +36,12 @@ bootstrap/cache/*
 storage/app/*
 
 # Documentation
-*.md
+AGENTS.md
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+CLAUDE.md
 README.md
-CHANGELOG.md
+RELEASE.md
 instructions
 
 # Build artifacts

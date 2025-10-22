@@ -70,6 +70,7 @@ terraform.rc
 *.tfplan
 *tfplan*
 plan.out
+*.lock.hcl
 
 # ========================================
 # SSH Keys and Certificates
