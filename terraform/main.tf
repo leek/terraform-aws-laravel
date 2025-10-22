@@ -232,11 +232,24 @@ module "compute" {
   s3_filesystem_bucket_name        = module.storage.app_filesystem_bucket_name
   sqs_queue_name                   = module.messaging.queue_name
   caller_identity_account_id       = data.aws_caller_identity.current.account_id
-  container_cpu                    = var.container_cpu
-  container_memory                 = var.container_memory
-  desired_count                    = var.desired_count
-  min_capacity                     = var.min_capacity
-  max_capacity                     = var.max_capacity
+
+  # Web service configuration
+  container_cpu    = var.container_cpu
+  container_memory = var.container_memory
+  desired_count    = var.desired_count
+  min_capacity     = var.min_capacity
+  max_capacity     = var.max_capacity
+
+  # Queue worker configuration
+  queue_worker_cpu           = var.queue_worker_cpu
+  queue_worker_memory        = var.queue_worker_memory
+  queue_worker_desired_count = var.queue_worker_desired_count
+
+  # Scheduler configuration
+  scheduler_cpu           = var.scheduler_cpu
+  scheduler_memory        = var.scheduler_memory
+  scheduler_desired_count = var.scheduler_desired_count
+
   meilisearch_host                 = var.enable_meilisearch ? module.meilisearch[0].meilisearch_host : ""
   meilisearch_master_key           = var.enable_meilisearch ? var.meilisearch_master_key : ""
   redis_endpoint                   = module.cache.redis_endpoint

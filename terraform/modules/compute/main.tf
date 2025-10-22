@@ -120,9 +120,9 @@ locals {
     queue-worker = {
       enabled            = var.enable_queue_worker
       container_role     = "queue-worker"
-      cpu                = var.container_cpu
-      memory             = var.container_memory
-      desired_count      = 1
+      cpu                = var.queue_worker_cpu
+      memory             = var.queue_worker_memory
+      desired_count      = var.queue_worker_desired_count
       port_mappings      = []
       health_check_grace = null
       deployment_config  = {}
@@ -131,9 +131,9 @@ locals {
     scheduler = {
       enabled            = var.enable_scheduler
       container_role     = "scheduler"
-      cpu                = 256
-      memory             = 512
-      desired_count      = 1
+      cpu                = var.scheduler_cpu
+      memory             = var.scheduler_memory
+      desired_count      = var.scheduler_desired_count
       port_mappings      = []
       health_check_grace = null
       deployment_config  = {}

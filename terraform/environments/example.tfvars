@@ -50,22 +50,31 @@ meilisearch_master_key = "CHANGE_ME_MEILISEARCH_KEY"
 # Container Configuration
 # ========================================
 
-# ECS Fargate container resources
-# CPU units (1024 = 1 vCPU). Options: 256, 512, 1024, 2048, 4096
-container_cpu = 1024
-
-# Memory in MB. Valid combinations with CPU:
+# Valid CPU/Memory combinations for Fargate:
 # CPU 256: 512, 1024, 2048
 # CPU 512: 1024, 2048, 3072, 4096
 # CPU 1024: 2048, 3072, 4096, 5120, 6144, 7168, 8192
 # CPU 2048: 4096 to 16384 (1GB increments)
 # CPU 4096: 8192 to 30720 (1GB increments)
-container_memory = 2048
 
-# ECS Service scaling configuration
-desired_count = 2  # Number of tasks to run
-min_capacity  = 1  # Minimum tasks for auto-scaling
-max_capacity  = 10 # Maximum tasks for auto-scaling
+# Web Service (handles HTTP requests)
+container_cpu    = 1024  # CPU units (1024 = 1 vCPU)
+container_memory = 2048  # Memory in MB
+
+# Web service scaling configuration
+desired_count = 2   # Number of tasks to run
+min_capacity  = 1   # Minimum tasks for auto-scaling
+max_capacity  = 10  # Maximum tasks for auto-scaling
+
+# Queue Worker (processes background jobs)
+queue_worker_cpu           = 512   # CPU units (512 = 0.5 vCPU)
+queue_worker_memory        = 1024  # Memory in MB
+queue_worker_desired_count = 1     # Number of queue worker tasks
+
+# Scheduler (runs Laravel's cron/scheduled tasks)
+scheduler_cpu           = 256  # CPU units (256 = 0.25 vCPU)
+scheduler_memory        = 512  # Memory in MB
+scheduler_desired_count = 1    # Number of scheduler tasks (typically 1)
 
 # ========================================
 # Database Configuration
