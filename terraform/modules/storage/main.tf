@@ -27,7 +27,7 @@ resource "aws_s3_bucket_policy" "alb_logs" {
       {
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::127311923021:root"  # ELB service account for us-east-1
+          AWS = "arn:aws:iam::127311923021:root" # ELB service account for us-east-1
         }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.alb_logs.arn}/alb/AWSLogs/${var.caller_identity_account_id}/*"
@@ -35,7 +35,7 @@ resource "aws_s3_bucket_policy" "alb_logs" {
       {
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::127311923021:root"  # ELB service account for us-east-1
+          AWS = "arn:aws:iam::127311923021:root" # ELB service account for us-east-1
         }
         Action   = "s3:GetBucketAcl"
         Resource = aws_s3_bucket.alb_logs.arn
@@ -142,7 +142,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Resource = "${aws_s3_bucket.cloudtrail.arn}/AWSLogs/${var.caller_identity_account_id}/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "s3:x-amz-acl"  = "bucket-owner-full-control"
             "AWS:SourceArn" = "arn:aws:cloudtrail:${var.aws_region}:${var.caller_identity_account_id}:trail/${var.app_name}-${var.environment}-cloudtrail"
           }
         }
@@ -194,7 +194,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "app_filesystem" {
 
 resource "aws_s3_bucket_versioning" "app_filesystem" {
   bucket = aws_s3_bucket.app_filesystem.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }

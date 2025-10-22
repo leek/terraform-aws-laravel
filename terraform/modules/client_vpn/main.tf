@@ -29,21 +29,21 @@ resource "aws_cloudwatch_log_stream" "vpn_connection_logs" {
 resource "aws_ec2_client_vpn_endpoint" "main" {
   description            = var.description
   server_certificate_arn = var.server_certificate_arn
-  client_cidr_block     = var.client_cidr_block
-  dns_servers           = var.dns_servers
-  split_tunnel          = var.split_tunnel
-  vpn_port              = var.vpn_port
-  transport_protocol    = var.transport_protocol
-  session_timeout_hours = var.session_timeout_hours
+  client_cidr_block      = var.client_cidr_block
+  dns_servers            = var.dns_servers
+  split_tunnel           = var.split_tunnel
+  vpn_port               = var.vpn_port
+  transport_protocol     = var.transport_protocol
+  session_timeout_hours  = var.session_timeout_hours
 
   authentication_options {
     type                           = "federated-authentication"
-    saml_provider_arn             = var.saml_provider_arn
+    saml_provider_arn              = var.saml_provider_arn
     self_service_saml_provider_arn = var.self_service_saml_provider_arn
   }
 
   connection_log_options {
-    enabled = var.connection_log_enabled
+    enabled               = var.connection_log_enabled
     cloudwatch_log_group  = var.connection_log_enabled ? aws_cloudwatch_log_group.vpn_connection_logs[0].name : null
     cloudwatch_log_stream = var.connection_log_enabled ? var.cloudwatch_log_stream : null
   }
