@@ -199,7 +199,7 @@ app_db_password       = "..."
 db_reporting_password = "..."
 
 # Application server mode
-app_server_mode      = "php-fpm"  # or "octane" for better performance
+app_server_mode      = "php-fpm"  # or "octane-swoole", "octane-roadrunner", or "octane-frankenphp" for better performance
 
 # Small instance sizes
 container_cpu        = 512

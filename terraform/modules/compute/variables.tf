@@ -199,7 +199,7 @@ variable "enable_scheduler" {
 }
 
 variable "app_server_mode" {
-  description = "Application server mode: 'php-fpm' or 'octane'"
+  description = "Application server mode. Valid values: 'php-fpm', 'octane-swoole', 'octane-roadrunner', and 'octane-frankenphp'."
   type        = string
   default     = "php-fpm"
 }
