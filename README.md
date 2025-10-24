@@ -316,11 +316,20 @@ Test Octane locally before deploying to production:
 ```bash
 # Build and run locally with Octane
 docker build -f docker/Dockerfile -t myapp .
+
+# Generate an APP_KEY first (use an existing Laravel project or Docker)
+# Option 1: From your Laravel project directory
+APP_KEY=$(php artisan key:generate --show)
+
+# Option 2: Or generate inside a temporary container
+APP_KEY=$(docker run --rm myapp php artisan key:generate --show)
+
+# Run with Octane
 docker run -p 8080:80 \
   -e APP_ENV=local \
   -e CONTAINER_ROLE=web \
   -e APP_SERVER_MODE=octane \
-  -e APP_KEY=base64:$(php artisan key:generate --show) \
+  -e APP_KEY=$APP_KEY \
   myapp
 
 # Test in browser
