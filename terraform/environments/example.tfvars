@@ -64,10 +64,14 @@ meilisearch_master_key = "CHANGE_ME_MEILISEARCH_KEY"
 # CPU 2048: 4096 to 16384 (1GB increments)
 # CPU 4096: 8192 to 30720 (1GB increments)
 
-# Application server mode: "php-fpm" (default) or "octane"
+# Application server mode: "php-fpm" (default), "octane-swoole", "octane-roadrunner", or "octane-frankenphp"
 # Laravel Octane provides significantly better performance by keeping the application
-# in memory and serving requests through Swoole. Requires Laravel 8+ with Octane installed.
-# Note: When using Octane, ensure your application is Octane-compatible (no global state).
+# in memory and serving requests through various high-performance servers.
+# - php-fpm: Traditional PHP-FPM (most compatible)
+# - octane-swoole: Octane with Swoole (battle-tested, excellent performance)
+# - octane-roadrunner: Octane with RoadRunner (Go-based, great for long-running tasks)
+# - octane-frankenphp: Octane with FrankenPHP (modern, includes Early Hints support)
+# Requires Laravel 8+ with Octane installed and an Octane-compatible application (no global state).
 app_server_mode = "php-fpm"
 
 # Web Service (handles HTTP requests)

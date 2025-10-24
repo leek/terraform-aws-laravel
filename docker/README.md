@@ -8,18 +8,29 @@ This Docker image supports multiple container roles via the `CONTAINER_ROLE` env
 
 ## Application Server Mode
 
-The **web** container role supports two modes via the `APP_SERVER_MODE` environment variable:
+The **web** container role supports multiple modes via the `APP_SERVER_MODE` environment variable:
 
 - **php-fpm** (default): Traditional PHP-FPM with Nginx as FastCGI proxy
   - Most compatible with all Laravel applications
   - Battle-tested and stable
   - Good for applications with moderate traffic
 
-- **octane**: Laravel Octane with Swoole and Nginx as reverse proxy
+- **octane-swoole**: Laravel Octane with Swoole and Nginx as reverse proxy
   - 2-5x better performance and throughput
-  - Lower latency and memory usage
-  - Requires Laravel 8+ with Octane package installed
-  - Application must be Octane-compatible (no global state)
+  - Battle-tested Octane driver with excellent performance
+  - Requires Swoole PHP extension (included in image)
+
+- **octane-roadrunner**: Laravel Octane with RoadRunner and Nginx as reverse proxy
+  - Go-based server with excellent stability
+  - Great for long-running tasks and memory management
+  - RoadRunner binary included in image
+
+- **octane-frankenphp**: Laravel Octane with FrankenPHP and Nginx as reverse proxy
+  - Modern PHP app server built on Caddy
+  - Supports Early Hints and modern HTTP features
+  - FrankenPHP binary included in image
+
+All Octane modes require Laravel 8+ with Octane package installed and an Octane-compatible application (no global state).
 
 ## Architecture
 
@@ -48,11 +59,27 @@ docker run -p 8080:80 \
   -e APP_KEY=base64:$(php artisan key:generate --show) \
   laravel-local
 
-# Run web server locally with Laravel Octane
+# Run web server locally with Laravel Octane (Swoole)
 docker run -p 8080:80 \
   -e APP_ENV=local \
   -e CONTAINER_ROLE=web \
-  -e APP_SERVER_MODE=octane \
+  -e APP_SERVER_MODE=octane-swoole \
+  -e APP_KEY=base64:$(php artisan key:generate --show) \
+  laravel-local
+
+# Run web server locally with Laravel Octane (RoadRunner)
+docker run -p 8080:80 \
+  -e APP_ENV=local \
+  -e CONTAINER_ROLE=web \
+  -e APP_SERVER_MODE=octane-roadrunner \
+  -e APP_KEY=base64:$(php artisan key:generate --show) \
+  laravel-local
+
+# Run web server locally with Laravel Octane (FrankenPHP)
+docker run -p 8080:80 \
+  -e APP_ENV=local \
+  -e CONTAINER_ROLE=web \
+  -e APP_SERVER_MODE=octane-frankenphp \
   -e APP_KEY=base64:$(php artisan key:generate --show) \
   laravel-local
 

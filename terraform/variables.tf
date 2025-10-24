@@ -104,12 +104,12 @@ variable "max_capacity" {
 
 # Application Server Mode
 variable "app_server_mode" {
-  description = "Application server mode: 'php-fpm' (default) or 'octane'. Octane provides better performance for Laravel applications."
+  description = "Application server mode: 'php-fpm' (default), 'octane-swoole', 'octane-frankenphp', or 'octane-roadrunner'. Octane modes provide better performance for Laravel applications."
   type        = string
   default     = "php-fpm"
   validation {
-    condition     = contains(["php-fpm", "octane"], var.app_server_mode)
-    error_message = "app_server_mode must be either 'php-fpm' or 'octane'"
+    condition     = contains(["php-fpm", "octane-swoole", "octane-frankenphp", "octane-roadrunner"], var.app_server_mode)
+    error_message = "app_server_mode must be one of: 'php-fpm', 'octane-swoole', 'octane-frankenphp', or 'octane-roadrunner'"
   }
 }
 

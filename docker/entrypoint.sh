@@ -51,27 +51,52 @@ php artisan config:cache --no-interaction || true
 case "$CONTAINER_ROLE" in
     web)
         # Select web server config based on APP_SERVER_MODE
-        if [ "$APP_SERVER_MODE" = "octane" ]; then
-            echo "Starting web server with Laravel Octane..."
-            SUPERVISOR_CONF="/etc/supervisor/conf.d/supervisord-web-octane.conf"
-            # Swap nginx config to use Octane reverse proxy
-            if [ -f /etc/nginx/custom.d/laravel.conf ]; then
-                mv /etc/nginx/custom.d/laravel.conf /etc/nginx/custom.d/.laravel.conf.disabled
-            fi
-            if [ -f /etc/nginx/custom.d/.laravel-octane.conf ]; then
-                mv /etc/nginx/custom.d/.laravel-octane.conf /etc/nginx/custom.d/laravel-octane.conf
-            fi
-        else
-            echo "Starting web server with PHP-FPM..."
-            SUPERVISOR_CONF="/etc/supervisor/conf.d/supervisord-web.conf"
-            # Ensure PHP-FPM config is active
-            if [ -f /etc/nginx/custom.d/.laravel.conf.disabled ]; then
-                mv /etc/nginx/custom.d/.laravel.conf.disabled /etc/nginx/custom.d/laravel.conf
-            fi
-            if [ -f /etc/nginx/custom.d/laravel-octane.conf ]; then
-                mv /etc/nginx/custom.d/laravel-octane.conf /etc/nginx/custom.d/.laravel-octane.conf
-            fi
-        fi
+        case "$APP_SERVER_MODE" in
+            octane-swoole)
+                echo "Starting web server with Laravel Octane (Swoole)..."
+                SUPERVISOR_CONF="/etc/supervisor/conf.d/supervisord-web-octane-swoole.conf"
+                # Swap nginx config to use Octane reverse proxy
+                if [ -f /etc/nginx/custom.d/laravel.conf ]; then
+                    mv /etc/nginx/custom.d/laravel.conf /etc/nginx/custom.d/.laravel.conf.disabled
+                fi
+                if [ -f /etc/nginx/custom.d/.laravel-octane.conf ]; then
+                    mv /etc/nginx/custom.d/.laravel-octane.conf /etc/nginx/custom.d/laravel-octane.conf
+                fi
+                ;;
+            octane-roadrunner)
+                echo "Starting web server with Laravel Octane (RoadRunner)..."
+                SUPERVISOR_CONF="/etc/supervisor/conf.d/supervisord-web-octane-roadrunner.conf"
+                # Swap nginx config to use Octane reverse proxy
+                if [ -f /etc/nginx/custom.d/laravel.conf ]; then
+                    mv /etc/nginx/custom.d/laravel.conf /etc/nginx/custom.d/.laravel.conf.disabled
+                fi
+                if [ -f /etc/nginx/custom.d/.laravel-octane.conf ]; then
+                    mv /etc/nginx/custom.d/.laravel-octane.conf /etc/nginx/custom.d/laravel-octane.conf
+                fi
+                ;;
+            octane-frankenphp)
+                echo "Starting web server with Laravel Octane (FrankenPHP)..."
+                SUPERVISOR_CONF="/etc/supervisor/conf.d/supervisord-web-octane-frankenphp.conf"
+                # Swap nginx config to use Octane reverse proxy
+                if [ -f /etc/nginx/custom.d/laravel.conf ]; then
+                    mv /etc/nginx/custom.d/laravel.conf /etc/nginx/custom.d/.laravel.conf.disabled
+                fi
+                if [ -f /etc/nginx/custom.d/.laravel-octane.conf ]; then
+                    mv /etc/nginx/custom.d/.laravel-octane.conf /etc/nginx/custom.d/laravel-octane.conf
+                fi
+                ;;
+            php-fpm|*)
+                echo "Starting web server with PHP-FPM..."
+                SUPERVISOR_CONF="/etc/supervisor/conf.d/supervisord-web.conf"
+                # Ensure PHP-FPM config is active
+                if [ -f /etc/nginx/custom.d/.laravel.conf.disabled ]; then
+                    mv /etc/nginx/custom.d/.laravel.conf.disabled /etc/nginx/custom.d/laravel.conf
+                fi
+                if [ -f /etc/nginx/custom.d/laravel-octane.conf ]; then
+                    mv /etc/nginx/custom.d/laravel-octane.conf /etc/nginx/custom.d/.laravel-octane.conf
+                fi
+                ;;
+        esac
         ;;
     queue-worker)
         echo "Starting queue worker..."
