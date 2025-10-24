@@ -121,6 +121,9 @@ module "rds_read_replica" {
   # Disable managed master password (not supported for replicas)
   manage_master_user_password = false
 
+  # Maintenance window - must not overlap with primary
+  maintenance_window = "Sun:05:30-Sun:06:30"
+
   # Read replicas inherit most settings from the source
   vpc_security_group_ids = [var.rds_security_group_id]
 

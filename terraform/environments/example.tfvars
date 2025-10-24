@@ -65,23 +65,23 @@ meilisearch_master_key = "CHANGE_ME_MEILISEARCH_KEY"
 # CPU 4096: 8192 to 30720 (1GB increments)
 
 # Web Service (handles HTTP requests)
-container_cpu    = 1024  # CPU units (1024 = 1 vCPU)
-container_memory = 2048  # Memory in MB
+container_cpu    = 1024 # CPU units (1024 = 1 vCPU)
+container_memory = 2048 # Memory in MB
 
 # Web service scaling configuration
-desired_count = 2   # Number of tasks to run
-min_capacity  = 1   # Minimum tasks for auto-scaling
-max_capacity  = 10  # Maximum tasks for auto-scaling
+desired_count = 2  # Number of tasks to run
+min_capacity  = 1  # Minimum tasks for auto-scaling
+max_capacity  = 10 # Maximum tasks for auto-scaling
 
 # Queue Worker (processes background jobs)
-queue_worker_cpu           = 512   # CPU units (512 = 0.5 vCPU)
-queue_worker_memory        = 1024  # Memory in MB
-queue_worker_desired_count = 1     # Number of queue worker tasks
+queue_worker_cpu           = 512  # CPU units (512 = 0.5 vCPU)
+queue_worker_memory        = 1024 # Memory in MB
+queue_worker_desired_count = 1    # Number of queue worker tasks
 
 # Scheduler (runs Laravel's cron/scheduled tasks)
-scheduler_cpu           = 256  # CPU units (256 = 0.25 vCPU)
-scheduler_memory        = 512  # Memory in MB
-scheduler_desired_count = 1    # Number of scheduler tasks (typically 1)
+scheduler_cpu           = 256 # CPU units (256 = 0.25 vCPU)
+scheduler_memory        = 512 # Memory in MB
+scheduler_desired_count = 1   # Number of scheduler tasks (typically 1)
 
 # ========================================
 # Database Configuration
@@ -295,3 +295,53 @@ kms_deletion_window = 7
 # DMARC TXT record for email authentication (only set for production)
 # Example: "v=DMARC1; p=quarantine; rua=mailto:dmarc@yourdomain.com"
 dmarc_record = ""
+
+# ========================================
+# OPTIONAL: Compliance and Auditing
+# ========================================
+# Configure AWS security and compliance services for healthcare applications.
+# Services marked as "production only" will only be created when environment = "production"
+
+# AWS Config - Tracks resource configuration changes
+# Environment-specific (created in all environments)
+enable_aws_config  = true # Track all resource configuration changes
+enable_hipaa_rules = true # Enable HIPAA-specific compliance rules
+
+# AWS Security Hub - Centralized security dashboard
+# Environment-specific (created in all environments)
+enable_security_hub              = true  # Centralized security/compliance dashboard
+enable_cis_standard              = true  # CIS AWS Foundations Benchmark
+enable_aws_foundational_standard = true  # AWS Foundational Security Best Practices
+enable_pci_dss_standard          = false # Enable if handling payment cards
+
+# Email notifications for critical/high Security Hub findings
+security_hub_notification_emails = []
+
+# AWS GuardDuty - Threat detection
+# Environment-specific (created in all environments)
+enable_guardduty            = true              # Detect threats and suspicious activity
+guardduty_finding_frequency = "FIFTEEN_MINUTES" # FIFTEEN_MINUTES, ONE_HOUR, or SIX_HOURS
+
+# Email notifications for GuardDuty threats
+guardduty_notification_emails = []
+
+# AWS Macie - PHI/PII Detection in S3
+# PRODUCTION ONLY (only created when environment = "production")
+enable_macie            = false      # Automatically scans S3 for PHI/PII (production only)
+macie_finding_frequency = "ONE_HOUR" # FIFTEEN_MINUTES, ONE_HOUR, or SIX_HOURS
+
+# IAM Access Analyzer - External access detection
+# PRODUCTION ONLY (only created when environment = "production")
+enable_access_analyzer = false # Identifies resources shared with external entities (production only)
+
+# AWS Backup Audit Manager - Backup compliance auditing
+# PRODUCTION ONLY (only created when environment = "production")
+enable_backup_audit_manager = false # Audits backup compliance (production only)
+enable_hipaa_framework      = true  # Enable HIPAA backup compliance framework
+
+# VPC Flow Logs - Network traffic logging
+# Environment-specific (created in all environments)
+# REQUIRED for HIPAA compliance
+enable_vpc_flow_logs     = true  # Required for HIPAA
+flow_logs_retention_days = 90    # Minimum 90 days recommended
+flow_logs_traffic_type   = "ALL" # Log all traffic (ACCEPT, REJECT, ALL)

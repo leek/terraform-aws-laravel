@@ -217,21 +217,21 @@ module "compute" {
   source     = "./modules/compute"
   depends_on = [module.load_balancer]
 
-  app_name                         = var.app_name
-  environment                      = var.environment
-  aws_region                       = var.aws_region
-  domain_name                      = var.domain_name
-  vpc_id                           = module.networking.vpc_id
-  private_subnets                  = module.networking.private_subnets
-  ecs_security_group_id            = module.networking.ecs_security_group_id
-  target_group_arn                 = module.load_balancer.target_group_arn
-  ecr_repository_url               = module.container_registry.repository_url
-  ecs_execution_role_arn           = module.security.ecs_execution_role_arn
-  ecs_task_role_arn                = module.security.ecs_task_role_arn
-  log_group_name                   = module.monitoring.log_group_name
-  s3_filesystem_bucket_name        = module.storage.app_filesystem_bucket_name
-  sqs_queue_name                   = module.messaging.queue_name
-  caller_identity_account_id       = data.aws_caller_identity.current.account_id
+  app_name                   = var.app_name
+  environment                = var.environment
+  aws_region                 = var.aws_region
+  domain_name                = var.domain_name
+  vpc_id                     = module.networking.vpc_id
+  private_subnets            = module.networking.private_subnets
+  ecs_security_group_id      = module.networking.ecs_security_group_id
+  target_group_arn           = module.load_balancer.target_group_arn
+  ecr_repository_url         = module.container_registry.repository_url
+  ecs_execution_role_arn     = module.security.ecs_execution_role_arn
+  ecs_task_role_arn          = module.security.ecs_task_role_arn
+  log_group_name             = module.monitoring.log_group_name
+  s3_filesystem_bucket_name  = module.storage.app_filesystem_bucket_name
+  sqs_queue_name             = module.messaging.queue_name
+  caller_identity_account_id = data.aws_caller_identity.current.account_id
 
   # Web service configuration
   container_cpu    = var.container_cpu
@@ -354,4 +354,56 @@ module "client_vpn" {
   target_subnet_id               = module.networking.private_subnets[1]
   additional_authorized_cidrs    = var.vpn_additional_authorized_cidrs
   common_tags                    = local.common_tags
+}
+
+# Compliance and Auditing
+module "compliance" {
+  source = "./modules/compliance"
+
+  app_name                   = var.app_name
+  environment                = var.environment
+  aws_region                 = var.aws_region
+  caller_identity_account_id = data.aws_caller_identity.current.account_id
+  vpc_id                     = module.networking.vpc_id
+  vpc_flow_logs_bucket_arn   = module.storage.vpc_flow_logs_bucket_arn
+  config_bucket_name         = module.storage.config_bucket_name
+  common_tags                = local.common_tags
+
+  # AWS Config
+  enable_aws_config  = var.enable_aws_config
+  enable_hipaa_rules = var.enable_hipaa_rules
+
+  # Security Hub
+  enable_security_hub              = var.enable_security_hub
+  enable_cis_standard              = var.enable_cis_standard
+  enable_pci_dss_standard          = var.enable_pci_dss_standard
+  enable_aws_foundational_standard = var.enable_aws_foundational_standard
+  security_hub_notification_emails = var.security_hub_notification_emails
+
+  # GuardDuty
+  enable_guardduty              = var.enable_guardduty
+  guardduty_finding_frequency   = var.guardduty_finding_frequency
+  guardduty_notification_emails = var.guardduty_notification_emails
+
+  # Macie (production only)
+  enable_macie            = var.enable_macie
+  macie_finding_frequency = var.macie_finding_frequency
+  macie_s3_buckets = var.enable_macie && var.environment == "production" ? [
+    module.storage.app_filesystem_bucket_name,
+    module.storage.alb_logs_bucket_name,
+    module.storage.cloudtrail_bucket_name
+  ] : []
+
+  # Access Analyzer (production only)
+  enable_access_analyzer = var.enable_access_analyzer
+
+  # Backup Audit Manager (production only)
+  enable_backup_audit_manager = var.enable_backup_audit_manager
+  enable_hipaa_framework      = var.enable_hipaa_framework
+  backup_vault_arn            = var.backup_vault_arn
+
+  # VPC Flow Logs
+  enable_vpc_flow_logs     = var.enable_vpc_flow_logs
+  flow_logs_retention_days = var.flow_logs_retention_days
+  flow_logs_traffic_type   = var.flow_logs_traffic_type
 }

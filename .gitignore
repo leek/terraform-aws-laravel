@@ -29,8 +29,14 @@ yarn-error.log
 Homestead.json
 Homestead.yaml
 
+# Local Makefile config
+Makefile.config
+
 # PHPUnit
 .phpunit.result.cache
+
+# Pest Browser Testing
+/tests/Browser/Screenshots
 
 # Tinkerwell
 .phpactor.json

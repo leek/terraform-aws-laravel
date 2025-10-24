@@ -114,7 +114,7 @@ RUN --mount=type=cache,target=/root/.npm \
 # We need APP_KEY and basic config for artisan commands to work
 # Override CACHE_STORE to avoid database connections during build
 RUN cp .env.example .env && \
-    CACHE_STORE=array php artisan key:generate --no-interaction --force
+    (CACHE_STORE=array php artisan key:generate --no-interaction --force --no-ansi || true)
 
 # Cache Laravel artifacts at build time (except config which depends on env vars)
 # This significantly speeds up container startup time

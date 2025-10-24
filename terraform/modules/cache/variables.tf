@@ -40,3 +40,9 @@ variable "snapshot_window" {
   type        = string
   default     = "03:00-05:00"
 }
+
+variable "maintenance_window" {
+  description = "Weekly time range for Redis maintenance (UTC)"
+  type        = string
+  default     = "sun:05:00-sun:06:00"
+}

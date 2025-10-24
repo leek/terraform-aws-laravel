@@ -59,6 +59,11 @@ terraform.init:
 	@echo "⚙️  Initializing Terraform..."
 	@$(tf) init -input=false
 
+.PHONY: terraform.inframap
+terraform.inframap:
+	@echo "🗺️  Generating infrastructure map..."
+	@$(tf) state pull | inframap generate | dot -Tpng -o inframap.png
+
 # Generic terraform plan target
 .PHONY: terraform.%.plan
 terraform.%.plan:
