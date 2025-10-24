@@ -217,21 +217,21 @@ module "compute" {
   source     = "./modules/compute"
   depends_on = [module.load_balancer]
 
-  app_name                         = var.app_name
-  environment                      = var.environment
-  aws_region                       = var.aws_region
-  domain_name                      = var.domain_name
-  vpc_id                           = module.networking.vpc_id
-  private_subnets                  = module.networking.private_subnets
-  ecs_security_group_id            = module.networking.ecs_security_group_id
-  target_group_arn                 = module.load_balancer.target_group_arn
-  ecr_repository_url               = module.container_registry.repository_url
-  ecs_execution_role_arn           = module.security.ecs_execution_role_arn
-  ecs_task_role_arn                = module.security.ecs_task_role_arn
-  log_group_name                   = module.monitoring.log_group_name
-  s3_filesystem_bucket_name        = module.storage.app_filesystem_bucket_name
-  sqs_queue_name                   = module.messaging.queue_name
-  caller_identity_account_id       = data.aws_caller_identity.current.account_id
+  app_name                   = var.app_name
+  environment                = var.environment
+  aws_region                 = var.aws_region
+  domain_name                = var.domain_name
+  vpc_id                     = module.networking.vpc_id
+  private_subnets            = module.networking.private_subnets
+  ecs_security_group_id      = module.networking.ecs_security_group_id
+  target_group_arn           = module.load_balancer.target_group_arn
+  ecr_repository_url         = module.container_registry.repository_url
+  ecs_execution_role_arn     = module.security.ecs_execution_role_arn
+  ecs_task_role_arn          = module.security.ecs_task_role_arn
+  log_group_name             = module.monitoring.log_group_name
+  s3_filesystem_bucket_name  = module.storage.app_filesystem_bucket_name
+  sqs_queue_name             = module.messaging.queue_name
+  caller_identity_account_id = data.aws_caller_identity.current.account_id
 
   # Web service configuration
   container_cpu    = var.container_cpu
@@ -254,6 +254,7 @@ module "compute" {
   meilisearch_master_key           = var.enable_meilisearch ? var.meilisearch_master_key : ""
   redis_endpoint                   = module.cache.redis_endpoint
   redis_port                       = module.cache.redis_port
+  app_server_mode                  = var.app_server_mode
   additional_environment_variables = var.additional_environment_variables
   common_tags                      = local.common_tags
 }

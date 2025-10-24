@@ -153,6 +153,26 @@ aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_
 
 ## Configuration Guide
 
+### Application Server Mode
+
+Choose between **PHP-FPM** (default) or **Laravel Octane** for serving your application:
+
+```hcl
+# Traditional PHP-FPM with Nginx (default, most compatible)
+app_server_mode = "php-fpm"
+
+# Laravel Octane with Swoole (better performance, requires Laravel 8+ with Octane package)
+app_server_mode = "octane"
+```
+
+**Laravel Octane Benefits:**
+- 2-5x better request throughput
+- Lower latency for API responses
+- Reduced memory usage per request
+- Better for high-traffic applications
+
+**Important:** Ensure your Laravel application is installed with the Octane package and is compatible with Octane (no global state, stateless services). See [Laravel Octane documentation](https://laravel.com/docs/octane) for details.
+
 ### Minimal Configuration
 
 For a basic setup (good for staging/development):
@@ -166,6 +186,9 @@ github_repo = "your-repo"
 
 app_db_password       = "..."
 db_reporting_password = "..."
+
+# Application server mode
+app_server_mode      = "php-fpm"  # or "octane" for better performance
 
 # Small instance sizes
 container_cpu        = 512
@@ -200,6 +223,9 @@ github_repo = "your-repo"
 
 app_db_password       = "..."
 db_reporting_password = "..."
+
+# Use Laravel Octane for better performance in production
+app_server_mode      = "octane"
 
 # Larger instance sizes
 container_cpu        = 2048

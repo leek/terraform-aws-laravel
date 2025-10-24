@@ -2,9 +2,24 @@
 
 This Docker image supports multiple container roles via the `CONTAINER_ROLE` environment variable:
 
-- **web** (default): Runs nginx + php-fpm to serve the web application
+- **web** (default): Runs nginx + php-fpm (or Laravel Octane) to serve the web application
 - **queue-worker**: Runs Laravel queue workers to process SQS jobs
 - **scheduler**: Runs Laravel scheduler to dispatch scheduled tasks
+
+## Application Server Mode
+
+The **web** container role supports two modes via the `APP_SERVER_MODE` environment variable:
+
+- **php-fpm** (default): Traditional PHP-FPM with Nginx as FastCGI proxy
+  - Most compatible with all Laravel applications
+  - Battle-tested and stable
+  - Good for applications with moderate traffic
+
+- **octane**: Laravel Octane with Swoole and Nginx as reverse proxy
+  - 2-5x better performance and throughput
+  - Lower latency and memory usage
+  - Requires Laravel 8+ with Octane package installed
+  - Application must be Octane-compatible (no global state)
 
 ## Architecture
 
@@ -25,10 +40,19 @@ This separation ensures:
 # Build the container
 docker build -f docker/Dockerfile -t laravel-local .
 
-# Run web server locally
+# Run web server locally with PHP-FPM (default)
 docker run -p 8080:80 \
   -e APP_ENV=local \
   -e CONTAINER_ROLE=web \
+  -e APP_SERVER_MODE=php-fpm \
+  -e APP_KEY=base64:$(php artisan key:generate --show) \
+  laravel-local
+
+# Run web server locally with Laravel Octane
+docker run -p 8080:80 \
+  -e APP_ENV=local \
+  -e CONTAINER_ROLE=web \
+  -e APP_SERVER_MODE=octane \
   -e APP_KEY=base64:$(php artisan key:generate --show) \
   laravel-local
 

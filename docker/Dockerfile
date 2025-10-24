@@ -53,9 +53,9 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     zip \
     pcntl \
     sockets \
-    # PECL
-    && pecl install redis \
-    && docker-php-ext-enable redis \
+    # PECL - Install redis and swoole (for Laravel Octane)
+    && pecl install redis swoole \
+    && docker-php-ext-enable redis swoole \
     # Cleanup after PHP extensions are built
     && apk del build-base autoconf automake libtool nasm git \
     && rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
@@ -143,17 +143,20 @@ COPY --chown=www-data:www-data docker/nginx/ /etc/nginx
 COPY docker/php/php-fpm.conf /usr/local/etc/php-fpm.d/www.conf
 COPY docker/php/php.ini /usr/local/etc/php/conf.d/99-custom.ini
 COPY docker/supervisord-web.conf /etc/supervisor/conf.d/supervisord-web.conf
+COPY docker/supervisord-web-octane.conf /etc/supervisor/conf.d/supervisord-web-octane.conf
 COPY docker/supervisord-queue-worker.conf /etc/supervisor/conf.d/supervisord-queue-worker.conf
 COPY docker/supervisord-scheduler.conf /etc/supervisor/conf.d/supervisord-scheduler.conf
 COPY docker/entrypoint.sh /entrypoint.sh
 
 # Make entrypoint executable and create supervisor log directory
+# Disable Octane config by default (will be enabled by entrypoint.sh if APP_SERVER_MODE=octane)
 RUN chmod +x /entrypoint.sh \
     && mkdir -p /var/log/supervisor \
     && mkdir -p /var/www/html/storage /var/www/html/bootstrap/cache \
     && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache \
     && chown -R www-data:www-data /etc/nginx/custom.d \
+    && mv /etc/nginx/custom.d/laravel-octane.conf /etc/nginx/custom.d/.laravel-octane.conf \
     && mkdir -p /var/lib/nginx/tmp/client_body \
     /var/lib/nginx/tmp/proxy \
     /var/lib/nginx/tmp/fastcgi \

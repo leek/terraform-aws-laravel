@@ -64,24 +64,30 @@ meilisearch_master_key = "CHANGE_ME_MEILISEARCH_KEY"
 # CPU 2048: 4096 to 16384 (1GB increments)
 # CPU 4096: 8192 to 30720 (1GB increments)
 
+# Application server mode: "php-fpm" (default) or "octane"
+# Laravel Octane provides significantly better performance by keeping the application
+# in memory and serving requests through Swoole. Requires Laravel 8+ with Octane installed.
+# Note: When using Octane, ensure your application is Octane-compatible (no global state).
+app_server_mode = "php-fpm"
+
 # Web Service (handles HTTP requests)
-container_cpu    = 1024  # CPU units (1024 = 1 vCPU)
-container_memory = 2048  # Memory in MB
+container_cpu    = 1024 # CPU units (1024 = 1 vCPU)
+container_memory = 2048 # Memory in MB
 
 # Web service scaling configuration
-desired_count = 2   # Number of tasks to run
-min_capacity  = 1   # Minimum tasks for auto-scaling
-max_capacity  = 10  # Maximum tasks for auto-scaling
+desired_count = 2  # Number of tasks to run
+min_capacity  = 1  # Minimum tasks for auto-scaling
+max_capacity  = 10 # Maximum tasks for auto-scaling
 
 # Queue Worker (processes background jobs)
-queue_worker_cpu           = 512   # CPU units (512 = 0.5 vCPU)
-queue_worker_memory        = 1024  # Memory in MB
-queue_worker_desired_count = 1     # Number of queue worker tasks
+queue_worker_cpu           = 512  # CPU units (512 = 0.5 vCPU)
+queue_worker_memory        = 1024 # Memory in MB
+queue_worker_desired_count = 1    # Number of queue worker tasks
 
 # Scheduler (runs Laravel's cron/scheduled tasks)
-scheduler_cpu           = 256  # CPU units (256 = 0.25 vCPU)
-scheduler_memory        = 512  # Memory in MB
-scheduler_desired_count = 1    # Number of scheduler tasks (typically 1)
+scheduler_cpu           = 256 # CPU units (256 = 0.25 vCPU)
+scheduler_memory        = 512 # Memory in MB
+scheduler_desired_count = 1   # Number of scheduler tasks (typically 1)
 
 # ========================================
 # Database Configuration
