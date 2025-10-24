@@ -18,6 +18,10 @@ locals {
       value = "https://${var.domain_name}"
     },
     {
+      name  = "APP_SERVER_MODE"
+      value = var.app_server_mode
+    },
+    {
       name  = "REDIS_HOST"
       value = var.redis_endpoint
     },
