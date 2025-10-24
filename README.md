@@ -256,6 +256,77 @@ healthcheck_alarm_emails = ["ops@example.com"]
 
 **Estimated cost**: ~$300-500/month
 
+## Switching Between PHP-FPM and Octane
+
+You can switch between PHP-FPM and Laravel Octane at any time by updating your Terraform configuration:
+
+### Prerequisites for Octane
+
+Before switching to Octane, ensure your Laravel application:
+
+1. **Has Laravel Octane installed:**
+   ```bash
+   composer require laravel/octane
+   php artisan octane:install --server=swoole
+   ```
+
+2. **Is Octane-compatible:**
+   - No reliance on global state or static variables
+   - Uses dependency injection properly
+   - Stateless service classes
+   - See [Laravel Octane documentation](https://laravel.com/docs/octane#introduction) for details
+
+### Switching to Octane
+
+1. Update your `.tfvars` file:
+   ```hcl
+   app_server_mode = "octane"
+   ```
+
+2. Apply the Terraform changes:
+   ```bash
+   terraform apply -var-file="environments/production.tfvars"
+   ```
+
+3. Deploy your updated Docker image (with Octane installed) and force a new ECS deployment:
+   ```bash
+   # The new tasks will automatically start with Octane
+   aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_service_name) --force-new-deployment
+   ```
+
+### Switching Back to PHP-FPM
+
+If you need to revert to PHP-FPM:
+
+1. Update your `.tfvars` file:
+   ```hcl
+   app_server_mode = "php-fpm"
+   ```
+
+2. Apply the Terraform changes and redeploy:
+   ```bash
+   terraform apply -var-file="environments/production.tfvars"
+   aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_service_name) --force-new-deployment
+   ```
+
+### Testing Your Configuration
+
+Test Octane locally before deploying to production:
+
+```bash
+# Build and run locally with Octane
+docker build -f docker/Dockerfile -t myapp .
+docker run -p 8080:80 \
+  -e APP_ENV=local \
+  -e CONTAINER_ROLE=web \
+  -e APP_SERVER_MODE=octane \
+  -e APP_KEY=base64:$(php artisan key:generate --show) \
+  myapp
+
+# Test in browser
+curl http://localhost:8080
+```
+
 ## Optional Features
 
 ### Enable Meilisearch (Search Engine)
