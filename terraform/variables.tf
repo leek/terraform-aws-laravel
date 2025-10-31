@@ -343,7 +343,13 @@ variable "enable_ses" {
 }
 
 variable "ses_test_emails" {
-  description = "List of test email addresses for SES sandbox"
+  description = "List of individual test email addresses for SES sandbox (fallback option)"
+  type        = list(string)
+  default     = []
+}
+
+variable "ses_test_email_domains" {
+  description = "List of domains to verify for SES sandbox (allows sending to any email at these domains)"
   type        = list(string)
   default     = []
 }

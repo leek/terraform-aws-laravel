@@ -19,9 +19,21 @@ variable "route53_zone_id" {
 }
 
 variable "test_email_addresses" {
-  description = "List of test email addresses for SES sandbox"
+  description = "List of individual test email addresses for SES sandbox (fallback option)"
   type        = list(string)
   default     = []
+}
+
+variable "test_email_domains" {
+  description = "List of domains to verify for SES sandbox (allows sending to any email at these domains)"
+  type        = list(string)
+  default     = []
+}
+
+variable "test_domain_route53_zone_id" {
+  description = "Route53 hosted zone ID for test email domains (required if test_email_domains is set)"
+  type        = string
+  default     = ""
 }
 
 variable "common_tags" {

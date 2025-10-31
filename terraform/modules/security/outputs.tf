@@ -39,6 +39,16 @@ output "s3_filesystem_kms_key_arn" {
   value       = aws_kms_key.s3_filesystem.arn
 }
 
+output "backup_kms_key_id" {
+  description = "KMS key ID for AWS Backup encryption"
+  value       = aws_kms_key.backup.key_id
+}
+
+output "backup_kms_key_arn" {
+  description = "KMS key ARN for AWS Backup encryption"
+  value       = aws_kms_key.backup.arn
+}
+
 # IAM Outputs
 output "ecs_execution_role_arn" {
   description = "ARN of the ECS execution role"

@@ -30,6 +30,13 @@ data "aws_route53_zone" "main" {
   private_zone = false
 }
 
+# Data source for test email domains (only needed for non-production environments)
+data "aws_route53_zone" "test_email_domain" {
+  count        = length(var.ses_test_email_domains) > 0 ? 1 : 0
+  name         = var.ses_test_email_domains[0]
+  private_zone = false
+}
+
 data "aws_caller_identity" "current" {}
 
 # Random passwords
@@ -166,12 +173,14 @@ module "email" {
   count  = var.enable_ses ? 1 : 0
   source = "./modules/email"
 
-  app_name             = var.app_name
-  environment          = var.environment
-  domain_name          = var.domain_name
-  route53_zone_id      = data.aws_route53_zone.main.zone_id
-  test_email_addresses = var.ses_test_emails
-  common_tags          = local.common_tags
+  app_name                    = var.app_name
+  environment                 = var.environment
+  domain_name                 = var.domain_name
+  route53_zone_id             = data.aws_route53_zone.main.zone_id
+  test_email_addresses        = var.ses_test_emails
+  test_email_domains          = var.ses_test_email_domains
+  test_domain_route53_zone_id = length(var.ses_test_email_domains) > 0 ? data.aws_route53_zone.test_email_domain[0].zone_id : ""
+  common_tags                 = local.common_tags
 }
 
 # Load Balancer (ALB, WAF)
@@ -393,6 +402,8 @@ module "compliance" {
     module.storage.alb_logs_bucket_name,
     module.storage.cloudtrail_bucket_name
   ] : []
+  macie_findings_bucket_name = var.enable_macie && var.environment == "production" ? module.storage.macie_findings_bucket_name : ""
+  s3_filesystem_kms_key_arn  = module.security.s3_filesystem_kms_key_arn
 
   # Access Analyzer (production only)
   enable_access_analyzer = var.enable_access_analyzer
@@ -401,6 +412,7 @@ module "compliance" {
   enable_backup_audit_manager = var.enable_backup_audit_manager
   enable_hipaa_framework      = var.enable_hipaa_framework
   backup_vault_arn            = var.backup_vault_arn
+  backup_kms_key_arn          = module.security.backup_kms_key_arn
 
   # VPC Flow Logs
   enable_vpc_flow_logs     = var.enable_vpc_flow_logs

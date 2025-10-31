@@ -47,7 +47,17 @@ output "access_analyzer_arn" {
   value       = var.enable_access_analyzer && var.environment == "production" ? aws_accessanalyzer_analyzer.main[0].arn : null
 }
 
-# Backup Audit Manager
+# AWS Backup
+output "backup_vault_arn" {
+  description = "ARN of the AWS Backup vault"
+  value       = var.enable_backup_audit_manager && var.environment == "production" ? aws_backup_vault.main[0].arn : null
+}
+
+output "backup_plan_id" {
+  description = "ID of the AWS Backup plan"
+  value       = var.enable_backup_audit_manager && var.environment == "production" ? aws_backup_plan.daily[0].id : null
+}
+
 output "backup_framework_arn" {
   description = "ARN of the AWS Backup audit framework"
   value       = var.enable_backup_audit_manager && var.enable_hipaa_framework && var.environment == "production" ? aws_backup_framework.hipaa[0].arn : null
@@ -56,6 +66,11 @@ output "backup_framework_arn" {
 output "backup_report_plan_arn" {
   description = "ARN of the AWS Backup report plan"
   value       = var.enable_backup_audit_manager && var.environment == "production" ? aws_backup_report_plan.daily[0].arn : null
+}
+
+output "restore_testing_plan_name" {
+  description = "Name of the AWS Backup restore testing plan"
+  value       = var.enable_backup_audit_manager && var.environment == "production" ? aws_backup_restore_testing_plan.weekly[0].name : null
 }
 
 # VPC Flow Logs

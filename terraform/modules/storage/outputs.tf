@@ -53,4 +53,15 @@ output "vpc_flow_logs_bucket_arn" {
   value       = aws_s3_bucket.vpc_flow_logs.arn
 }
 
+# Macie Findings Bucket
+output "macie_findings_bucket_name" {
+  description = "Name of the Macie findings bucket"
+  value       = aws_s3_bucket.macie_findings.bucket
+}
+
+output "macie_findings_bucket_arn" {
+  description = "ARN of the Macie findings bucket"
+  value       = aws_s3_bucket.macie_findings.arn
+}
+
 

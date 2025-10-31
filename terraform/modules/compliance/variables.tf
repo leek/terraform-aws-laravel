@@ -170,6 +170,18 @@ variable "macie_s3_buckets" {
   default     = []
 }
 
+variable "macie_findings_bucket_name" {
+  description = "S3 bucket name for Macie findings export"
+  type        = string
+  default     = ""
+}
+
+variable "s3_filesystem_kms_key_arn" {
+  description = "KMS key ARN for S3 filesystem encryption (used by Macie)"
+  type        = string
+  default     = ""
+}
+
 # ========================================
 # IAM Access Analyzer (Production Only)
 # ========================================
@@ -192,6 +204,12 @@ variable "enable_backup_audit_manager" {
 
 variable "backup_vault_arn" {
   description = "ARN of the backup vault to audit"
+  type        = string
+  default     = ""
+}
+
+variable "backup_kms_key_arn" {
+  description = "KMS key ARN for AWS Backup encryption"
   type        = string
   default     = ""
 }

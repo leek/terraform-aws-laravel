@@ -56,6 +56,39 @@ resource "aws_kms_key" "s3_filesystem" {
   deletion_window_in_days = var.kms_deletion_window
   enable_key_rotation     = true
 
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.caller_identity_account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow Macie to use KMS key for S3 operations"
+        Effect = "Allow"
+        Principal = {
+          Service = "macie.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:GenerateDataKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.caller_identity_account_id
+          }
+        }
+      }
+    ]
+  })
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-${var.environment}-s3-filesystem-key"
   })
@@ -64,6 +97,22 @@ resource "aws_kms_key" "s3_filesystem" {
 resource "aws_kms_alias" "s3_filesystem" {
   name          = "alias/${var.app_name}-${var.environment}-s3-filesystem"
   target_key_id = aws_kms_key.s3_filesystem.key_id
+}
+
+# AWS Backup KMS Key
+resource "aws_kms_key" "backup" {
+  description             = "KMS key for ${var.app_name}-${var.environment} AWS Backup encryption"
+  deletion_window_in_days = var.kms_deletion_window
+  enable_key_rotation     = true
+
+  tags = merge(var.common_tags, {
+    Name = "${var.app_name}-${var.environment}-backup-key"
+  })
+}
+
+resource "aws_kms_alias" "backup" {
+  name          = "alias/${var.app_name}-${var.environment}-backup"
+  target_key_id = aws_kms_key.backup.key_id
 }
 
 # ========================================

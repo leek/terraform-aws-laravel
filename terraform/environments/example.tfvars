@@ -201,7 +201,13 @@ enable_meilisearch = true
 # Enable AWS SES for sending emails
 enable_ses = true
 
-# Test email addresses (required when SES is in sandbox mode)
+# Test email domains (allows sending to any email at these domains when in sandbox mode)
+# Recommended for non-production environments
+# Example: ses_test_email_domains = ["yourcompany.com"]
+ses_test_email_domains = []
+
+# Individual test email addresses (fallback option when domain verification is not available)
+# Only needed if you can't verify an entire domain
 ses_test_emails = []
 
 # ========================================
