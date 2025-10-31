@@ -138,10 +138,10 @@ RUN CACHE_STORE=array php -d memory_limit=512M artisan event:cache --no-interact
     CACHE_STORE=array php -d memory_limit=512M artisan filament:cache-components --no-interaction --no-ansi
 
 # Download RoadRunner binary for Laravel Octane
-RUN curl -sSL https://github.com/roadrunner-server/roadrunner/releases/download/v2024.2.1/roadrunner-2024.2.1-linux-amd64.tar.gz \
+RUN set -o pipefail && \
+    curl -sSL https://github.com/roadrunner-server/roadrunner/releases/download/v2024.2.1/roadrunner-2024.2.1-linux-amd64.tar.gz \
     | tar -xz -C /usr/local/bin roadrunner && \
     chmod +x /usr/local/bin/roadrunner
-
 # Download FrankenPHP binary for Laravel Octane
 RUN curl -sSL https://github.com/dunglas/frankenphp/releases/download/v1.3.5/frankenphp-linux-x86_64 \
     -o /usr/local/bin/frankenphp && \
