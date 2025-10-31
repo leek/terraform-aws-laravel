@@ -349,6 +349,34 @@ variable "ses_test_emails" {
 }
 
 # ========================================
+# OPTIONAL: Nightwatch
+# ========================================
+
+variable "enable_nightwatch" {
+  description = "Enable Laravel Nightwatch monitoring dashboard"
+  type        = bool
+  default     = false
+}
+
+variable "nightwatch_cpu" {
+  description = "CPU units for the Nightwatch container (256 = 0.25 vCPU, 512 = 0.5 vCPU)"
+  type        = number
+  default     = 256
+}
+
+variable "nightwatch_memory" {
+  description = "Memory for the Nightwatch container in MB"
+  type        = number
+  default     = 512
+}
+
+variable "nightwatch_desired_count" {
+  description = "Desired number of Nightwatch tasks (typically 1)"
+  type        = number
+  default     = 1
+}
+
+# ========================================
 # OPTIONAL: Monitoring
 # ========================================
 

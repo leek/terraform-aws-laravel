@@ -23,6 +23,7 @@ Production-ready AWS infrastructure for Laravel applications using Terraform. Th
 ### Optional Features
 - **Meilisearch** - Fast, typo-tolerant search engine (optional)
 - **AWS SES** - Email sending capability (optional)
+- **Nightwatch** - Laravel monitoring dashboard for queues, cache, and schedule (optional)
 - **Client VPN** - Secure remote access to VPC (optional)
 - **Bastion Host** - Secure database access (optional)
 - **CloudTrail** - API audit logging (optional)
@@ -37,10 +38,11 @@ Production-ready AWS infrastructure for Laravel applications using Terraform. Th
 
 ## Architecture
 
-The infrastructure deploys three separate ECS services:
+The infrastructure deploys three core ECS services (plus optional Nightwatch):
 1. **Web Service** - Handles HTTP/HTTPS traffic through the ALB (auto-scales based on traffic)
 2. **Queue Worker Service** - Processes Laravel queue jobs from SQS (always runs 1 task)
 3. **Scheduler Service** - Runs Laravel's task scheduler (`php artisan schedule:work`) (always runs 1 task)
+4. **Nightwatch Service** (Optional) - Monitoring dashboard for queues, cache, and schedule (port 8080)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -180,6 +182,7 @@ redis_node_type      = "cache.t3.micro"
 # Disable optional features
 enable_meilisearch   = false
 enable_ses           = false
+enable_nightwatch    = false
 enable_client_vpn    = false
 enable_bastion       = false
 enable_cloudtrail    = false
@@ -258,6 +261,37 @@ Laravel configuration:
 MAIL_MAILER=ses
 MAIL_FROM_ADDRESS=noreply@yourdomain.com
 ```
+
+### Enable Nightwatch (Monitoring Dashboard)
+
+```hcl
+enable_nightwatch        = true
+nightwatch_cpu           = 256   # CPU units (256 = 0.25 vCPU)
+nightwatch_memory        = 512   # Memory in MB
+nightwatch_desired_count = 1     # Number of tasks
+```
+
+Laravel Nightwatch is a monitoring dashboard for Laravel applications that provides real-time insights into queues, cache, schedule, and other Laravel components.
+
+When enabled, a dedicated ECS service is created to run the Nightwatch dashboard on port 8080.
+
+**Installation in your Laravel application:**
+
+1. Install the Nightwatch package:
+```bash
+composer require laravel/nightwatch
+```
+
+2. Publish the configuration:
+```bash
+php artisan nightwatch:install
+```
+
+3. The Nightwatch dashboard will be accessible at `http://nightwatch-service:8080`
+
+For detailed setup instructions, see the [official Laravel Nightwatch documentation](https://nightwatch.laravel.com/docs/guides/docker).
+
+**Note**: The Nightwatch service runs as a separate container with `CONTAINER_ROLE=nightwatch` and automatically starts with `php artisan nightwatch:start`.
 
 ### Enable Client VPN
 

@@ -114,8 +114,13 @@ output "ecs_scheduler_service_name" {
   value       = module.compute.scheduler_service_name
 }
 
+output "ecs_nightwatch_service_name" {
+  description = "Name of the Nightwatch ECS service"
+  value       = module.compute.nightwatch_service_name
+}
+
 output "ecs_worker_services" {
-  description = "Map of all worker service names (queue-worker, scheduler)"
+  description = "Map of all worker service names (queue-worker, scheduler, nightwatch)"
   value       = module.compute.worker_services
 }
 

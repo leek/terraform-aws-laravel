@@ -205,6 +205,19 @@ enable_ses = true
 ses_test_emails = []
 
 # ========================================
+# OPTIONAL: Nightwatch Configuration
+# ========================================
+
+# Enable Laravel Nightwatch monitoring dashboard
+# Set to true to enable Nightwatch for monitoring queues, cache, schedule, etc.
+enable_nightwatch = false
+
+# Nightwatch resource configuration
+# nightwatch_cpu           = 256  # CPU units (256 = 0.25 vCPU)
+# nightwatch_memory        = 512  # Memory in MB
+# nightwatch_desired_count = 1    # Number of Nightwatch tasks
+
+# ========================================
 # OPTIONAL: Monitoring Configuration
 # ========================================
 

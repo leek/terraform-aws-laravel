@@ -157,6 +157,7 @@ COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/supervisord-web.conf /etc/supervisor/conf.d/supervisord-web.conf
 COPY docker/supervisord-queue-worker.conf /etc/supervisor/conf.d/supervisord-queue-worker.conf
 COPY docker/supervisord-scheduler.conf /etc/supervisor/conf.d/supervisord-scheduler.conf
+COPY docker/supervisord-nightwatch.conf /etc/supervisor/conf.d/supervisord-nightwatch.conf
 COPY docker/entrypoint.sh /entrypoint.sh
 
 # Make entrypoint executable and create supervisor log directory

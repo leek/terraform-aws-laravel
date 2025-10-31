@@ -58,9 +58,13 @@ case "$CONTAINER_ROLE" in
         echo "Starting scheduler..."
         SUPERVISOR_CONF="/etc/supervisor/conf.d/supervisord-scheduler.conf"
         ;;
+    nightwatch)
+        echo "Starting Nightwatch monitoring dashboard..."
+        SUPERVISOR_CONF="/etc/supervisor/conf.d/supervisord-nightwatch.conf"
+        ;;
     *)
         echo "❌ ERROR: Unknown CONTAINER_ROLE: $CONTAINER_ROLE"
-        echo "Valid values: web, queue-worker, scheduler"
+        echo "Valid values: web, queue-worker, scheduler, nightwatch"
         exit 1
         ;;
 esac

@@ -197,3 +197,31 @@ variable "enable_scheduler" {
   type        = bool
   default     = true
 }
+
+# ========================================
+# Nightwatch Configuration
+# ========================================
+
+variable "enable_nightwatch" {
+  description = "Enable the Nightwatch monitoring dashboard service"
+  type        = bool
+  default     = false
+}
+
+variable "nightwatch_cpu" {
+  description = "CPU units for the Nightwatch container (256 = 0.25 vCPU, 512 = 0.5 vCPU)"
+  type        = number
+  default     = 256
+}
+
+variable "nightwatch_memory" {
+  description = "Memory for the Nightwatch container in MB"
+  type        = number
+  default     = 512
+}
+
+variable "nightwatch_desired_count" {
+  description = "Desired number of Nightwatch tasks (typically 1)"
+  type        = number
+  default     = 1
+}
