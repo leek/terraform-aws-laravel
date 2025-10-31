@@ -17,8 +17,8 @@ SSH_KEY := ~/.ssh/$(APP_NAME)-bastion-key.pem
 # Docker configuration
 DOCKER_PLATFORM := linux/amd64
 
-# ECS services to deploy
-ECS_SERVICES := service queue-worker scheduler
+# ECS services to deploy (nightwatch is optional and may not always exist)
+ECS_SERVICES := service queue-worker scheduler nightwatch
 
 # Environments
 ENVIRONMENTS := staging uat production

@@ -140,6 +140,25 @@ variable "scheduler_desired_count" {
   default     = 1
 }
 
+# Nightwatch (runs Laravel browser tests)
+variable "nightwatch_cpu" {
+  description = "CPU units for the Nightwatch container (256 = 0.25 vCPU, 512 = 0.5 vCPU, 1024 = 1 vCPU)"
+  type        = number
+  default     = 512
+}
+
+variable "nightwatch_memory" {
+  description = "Memory for the Nightwatch container in MB"
+  type        = number
+  default     = 1024
+}
+
+variable "nightwatch_desired_count" {
+  description = "Desired number of Nightwatch tasks (typically 0 or 1)"
+  type        = number
+  default     = 0
+}
+
 # ========================================
 # Database Configuration
 # ========================================
@@ -330,6 +349,16 @@ variable "enable_meilisearch" {
   description = "Enable Meilisearch search engine"
   type        = bool
   default     = true
+}
+
+# ========================================
+# OPTIONAL: Nightwatch
+# ========================================
+
+variable "enable_nightwatch" {
+  description = "Enable Laravel Nightwatch for browser automation and end-to-end testing"
+  type        = bool
+  default     = false
 }
 
 # ========================================

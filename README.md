@@ -23,6 +23,7 @@ Production-ready AWS infrastructure for Laravel applications using Terraform. Th
 ### Optional Features
 - **Meilisearch** - Fast, typo-tolerant search engine (optional)
 - **AWS SES** - Email sending capability (optional)
+- **Nightwatch** - Browser automation and end-to-end testing (optional)
 - **Client VPN** - Secure remote access to VPC (optional)
 - **Bastion Host** - Secure database access (optional)
 - **CloudTrail** - API audit logging (optional)
@@ -37,10 +38,11 @@ Production-ready AWS infrastructure for Laravel applications using Terraform. Th
 
 ## Architecture
 
-The infrastructure deploys three separate ECS services:
+The infrastructure deploys three core ECS services (plus optional services):
 1. **Web Service** - Handles HTTP/HTTPS traffic through the ALB (auto-scales based on traffic)
 2. **Queue Worker Service** - Processes Laravel queue jobs from SQS (always runs 1 task)
 3. **Scheduler Service** - Runs Laravel's task scheduler (`php artisan schedule:work`) (always runs 1 task)
+4. **Nightwatch Service** (Optional) - Runs browser automation and end-to-end tests (disabled by default)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -144,11 +146,14 @@ aws ecr get-login-password | docker login --username AWS --password-stdin $(terr
 docker tag myapp:latest $(terraform output -raw ecr_repository_url):latest
 docker push $(terraform output -raw ecr_repository_url):latest
 
-# Force new ECS deployment (updates all three services: web, queue-worker, scheduler)
+# Force new ECS deployment (updates core services: web, queue-worker, scheduler)
 CLUSTER=$(terraform output -raw ecs_cluster_name)
 aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_service_name) --force-new-deployment
 aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_queue_worker_service_name) --force-new-deployment
 aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_scheduler_service_name) --force-new-deployment
+
+# Optionally update Nightwatch service (if enabled)
+# aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_nightwatch_service_name) --force-new-deployment
 ```
 
 ## Configuration Guide
@@ -180,6 +185,7 @@ redis_node_type      = "cache.t3.micro"
 # Disable optional features
 enable_meilisearch   = false
 enable_ses           = false
+enable_nightwatch    = false
 enable_client_vpn    = false
 enable_bastion       = false
 enable_cloudtrail    = false
@@ -258,6 +264,41 @@ Laravel configuration:
 MAIL_MAILER=ses
 MAIL_FROM_ADDRESS=noreply@yourdomain.com
 ```
+
+### Enable Nightwatch (Browser Testing)
+
+```hcl
+enable_nightwatch        = true
+nightwatch_cpu           = 512   # CPU units (512 = 0.5 vCPU)
+nightwatch_memory        = 1024  # Memory in MB
+nightwatch_desired_count = 1     # Number of tasks (typically 0 or 1)
+```
+
+Laravel Nightwatch provides browser automation and end-to-end testing capabilities. When enabled, a dedicated ECS service is created to run Nightwatch tests.
+
+Key features:
+- Runs as a separate ECS Fargate service
+- Uses the same Docker image as your web application
+- Identified by `CONTAINER_ROLE=nightwatch` environment variable
+- Can be scaled independently from web and worker services
+
+Usage in your Laravel application:
+```dockerfile
+# In your Dockerfile entrypoint or startup script
+if [ "$CONTAINER_ROLE" = "nightwatch" ]; then
+    # Run Nightwatch tests
+    php artisan nightwatch:run
+fi
+```
+
+To deploy Nightwatch tests:
+```bash
+# Force redeploy Nightwatch service after pushing new image
+CLUSTER=$(terraform output -raw ecs_cluster_name)
+aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_nightwatch_service_name) --force-new-deployment
+```
+
+**Note**: Set `nightwatch_desired_count = 0` or `enable_nightwatch = false` to disable the service and avoid incurring costs when not running tests.
 
 ### Enable Client VPN
 
@@ -548,13 +589,14 @@ terraform/
 
 ### ECS Services
 
-The compute module deploys three ECS services:
+The compute module deploys three core ECS services (plus optional services):
 
 - **Web Service**: Handles HTTP/HTTPS requests via the Application Load Balancer. Auto-scales based on CPU and memory utilization.
 - **Queue Worker Service**: Processes Laravel queue jobs from SQS. Runs continuously with 1 task by default.
 - **Scheduler Service**: Runs Laravel's task scheduler (`php artisan schedule:work`). Runs continuously with 1 task.
+- **Nightwatch Service** (Optional): Runs browser automation and end-to-end tests. Disabled by default (`enable_nightwatch = false`).
 
-All three services share the same Docker image from ECR but run different commands based on their role.
+All services share the same Docker image from ECR but run different commands based on their role (identified by the `CONTAINER_ROLE` environment variable).
 
 ## Support & Contributing
 

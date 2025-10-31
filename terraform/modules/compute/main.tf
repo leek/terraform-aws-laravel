@@ -115,7 +115,7 @@ locals {
     }
   ]
 
-  # Worker services configuration (queue-worker and scheduler)
+  # Worker services configuration (queue-worker, scheduler, and nightwatch)
   worker_services = {
     queue-worker = {
       enabled            = var.enable_queue_worker
@@ -138,6 +138,17 @@ locals {
       health_check_grace = null
       deployment_config  = {}
       log_stream_prefix  = "scheduler"
+    }
+    nightwatch = {
+      enabled            = var.enable_nightwatch
+      container_role     = "nightwatch"
+      cpu                = var.nightwatch_cpu
+      memory             = var.nightwatch_memory
+      desired_count      = var.nightwatch_desired_count
+      port_mappings      = []
+      health_check_grace = null
+      deployment_config  = {}
+      log_stream_prefix  = "nightwatch"
     }
   }
 
