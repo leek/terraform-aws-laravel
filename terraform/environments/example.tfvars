@@ -83,11 +83,6 @@ scheduler_cpu           = 256 # CPU units (256 = 0.25 vCPU)
 scheduler_memory        = 512 # Memory in MB
 scheduler_desired_count = 1   # Number of scheduler tasks (typically 1)
 
-# Nightwatch (runs Laravel browser automation and end-to-end tests)
-# nightwatch_cpu           = 512  # CPU units (512 = 0.5 vCPU)
-# nightwatch_memory        = 1024 # Memory in MB
-# nightwatch_desired_count = 0    # Number of Nightwatch tasks (typically 0 or 1, 0 disables)
-
 # ========================================
 # Database Configuration
 # ========================================
@@ -208,14 +203,6 @@ enable_ses = true
 
 # Test email addresses (required when SES is in sandbox mode)
 ses_test_emails = []
-
-# ========================================
-# OPTIONAL: Nightwatch Configuration
-# ========================================
-
-# Enable Laravel Nightwatch for browser automation and end-to-end testing
-# Set to true to enable Nightwatch service
-enable_nightwatch = false
 
 # ========================================
 # OPTIONAL: Monitoring Configuration

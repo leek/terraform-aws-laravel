@@ -250,12 +250,6 @@ module "compute" {
   scheduler_memory        = var.scheduler_memory
   scheduler_desired_count = var.scheduler_desired_count
 
-  # Nightwatch configuration
-  enable_nightwatch        = var.enable_nightwatch
-  nightwatch_cpu           = var.nightwatch_cpu
-  nightwatch_memory        = var.nightwatch_memory
-  nightwatch_desired_count = var.nightwatch_desired_count
-
   meilisearch_host                 = var.enable_meilisearch ? module.meilisearch[0].meilisearch_host : ""
   meilisearch_master_key           = var.enable_meilisearch ? var.meilisearch_master_key : ""
   redis_endpoint                   = module.cache.redis_endpoint
