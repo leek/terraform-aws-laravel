@@ -94,27 +94,38 @@ RUN apk add --no-cache \
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Copy dependency files
-COPY composer.json composer.lock auth.json* package.json package-lock.json ./
+# Copy Composer dependency files
+COPY composer.json composer.lock auth.json* ./
+
+# Copy optional vendor-src and patches directories if they exist
+RUN --mount=type=bind,source=.,target=/src \
+    if [ -d /src/vendor-src ]; then cp -a /src/vendor-src ./vendor-src; fi && \
+    if [ -d /src/patches ]; then cp -a /src/patches ./patches; fi
+
+# Install PHP dependencies with cache mounts
+RUN --mount=type=cache,target=/root/.composer/cache \
+    composer install --no-scripts --optimize-autoloader --no-interaction --prefer-dist --no-ansi --no-progress
+
+# Copy NPM dependency files
+COPY package.json package-lock.json ./
+
+# Install NPM dependencies with cache mounts
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci && \
+    npm cache clean --force
 
 # Copy the rest of the application files
 COPY . .
 
-# Install PHP and Node dependencies with cache mounts
-RUN --mount=type=cache,target=/root/.composer/cache \
-    composer install --no-scripts --optimize-autoloader --no-interaction --prefer-dist && \
-    composer clear-cache
-
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci && \
-    npm cache clean --force && \
-    npm run build
+# Build assets
+RUN npm run build && \
+    rm -rf node_modules
 
 # Create minimal .env for build-time caching (will be replaced at runtime)
 # We need APP_KEY and basic config for artisan commands to work
 # Override CACHE_STORE to avoid database connections during build
 RUN cp .env.example .env && \
-    CACHE_STORE=array php artisan key:generate --no-interaction --force
+    (CACHE_STORE=array php artisan key:generate --no-interaction --force --no-ansi || true)
 
 # Cache Laravel artifacts at build time (except config which depends on env vars)
 # This significantly speeds up container startup time
@@ -156,6 +167,7 @@ COPY docker/.profile /root/.profile
 COPY --chown=www-data:www-data docker/nginx/ /etc/nginx
 COPY docker/php/php-fpm.conf /usr/local/etc/php-fpm.d/www.conf
 COPY docker/php/php.ini /usr/local/etc/php/conf.d/99-custom.ini
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/supervisord-web.conf /etc/supervisor/conf.d/supervisord-web.conf
 COPY docker/supervisord-web-octane-swoole.conf /etc/supervisor/conf.d/supervisord-web-octane-swoole.conf
 COPY docker/supervisord-web-octane-roadrunner.conf /etc/supervisor/conf.d/supervisord-web-octane-roadrunner.conf
@@ -167,12 +179,10 @@ COPY docker/entrypoint.sh /entrypoint.sh
 # Make entrypoint executable and create supervisor log directory
 # Disable Octane config by default (will be enabled by entrypoint.sh if APP_SERVER_MODE=octane)
 RUN chmod +x /entrypoint.sh \
-    && mkdir -p /var/log/supervisor \
-    && mkdir -p /var/www/html/storage /var/www/html/bootstrap/cache \
-    && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
-    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache \
-    && chown -R www-data:www-data /etc/nginx/custom.d \
-    && mv /etc/nginx/custom.d/laravel-octane.conf /etc/nginx/custom.d/.laravel-octane.conf \
+    && mkdir -p /var/log/supervisor /etc/nginx/custom.d \
+    && mkdir -p storage bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache /etc/nginx \
+    && chmod -R 775 storage bootstrap/cache \
     && mkdir -p /var/lib/nginx/tmp/client_body \
     /var/lib/nginx/tmp/proxy \
     /var/lib/nginx/tmp/fastcgi \

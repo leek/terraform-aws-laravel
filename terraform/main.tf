@@ -30,6 +30,13 @@ data "aws_route53_zone" "main" {
   private_zone = false
 }
 
+# Data source for test email domains (only needed for non-production environments)
+data "aws_route53_zone" "test_email_domain" {
+  count        = length(var.ses_test_email_domains) > 0 ? 1 : 0
+  name         = var.ses_test_email_domains[0]
+  private_zone = false
+}
+
 data "aws_caller_identity" "current" {}
 
 # Random passwords
@@ -166,12 +173,14 @@ module "email" {
   count  = var.enable_ses ? 1 : 0
   source = "./modules/email"
 
-  app_name             = var.app_name
-  environment          = var.environment
-  domain_name          = var.domain_name
-  route53_zone_id      = data.aws_route53_zone.main.zone_id
-  test_email_addresses = var.ses_test_emails
-  common_tags          = local.common_tags
+  app_name                    = var.app_name
+  environment                 = var.environment
+  domain_name                 = var.domain_name
+  route53_zone_id             = data.aws_route53_zone.main.zone_id
+  test_email_addresses        = var.ses_test_emails
+  test_email_domains          = var.ses_test_email_domains
+  test_domain_route53_zone_id = length(var.ses_test_email_domains) > 0 ? data.aws_route53_zone.test_email_domain[0].zone_id : ""
+  common_tags                 = local.common_tags
 }
 
 # Load Balancer (ALB, WAF)
@@ -355,4 +364,59 @@ module "client_vpn" {
   target_subnet_id               = module.networking.private_subnets[1]
   additional_authorized_cidrs    = var.vpn_additional_authorized_cidrs
   common_tags                    = local.common_tags
+}
+
+# Compliance and Auditing
+module "compliance" {
+  source = "./modules/compliance"
+
+  app_name                   = var.app_name
+  environment                = var.environment
+  aws_region                 = var.aws_region
+  caller_identity_account_id = data.aws_caller_identity.current.account_id
+  vpc_id                     = module.networking.vpc_id
+  vpc_flow_logs_bucket_arn   = module.storage.vpc_flow_logs_bucket_arn
+  config_bucket_name         = module.storage.config_bucket_name
+  common_tags                = local.common_tags
+
+  # AWS Config
+  enable_aws_config  = var.enable_aws_config
+  enable_hipaa_rules = var.enable_hipaa_rules
+
+  # Security Hub
+  enable_security_hub              = var.enable_security_hub
+  enable_cis_standard              = var.enable_cis_standard
+  enable_pci_dss_standard          = var.enable_pci_dss_standard
+  enable_aws_foundational_standard = var.enable_aws_foundational_standard
+  security_hub_notification_emails = var.security_hub_notification_emails
+
+  # GuardDuty
+  enable_guardduty              = var.enable_guardduty
+  guardduty_finding_frequency   = var.guardduty_finding_frequency
+  guardduty_notification_emails = var.guardduty_notification_emails
+
+  # Macie (production only)
+  enable_macie            = var.enable_macie
+  macie_finding_frequency = var.macie_finding_frequency
+  macie_s3_buckets = var.enable_macie && var.environment == "production" ? [
+    module.storage.app_filesystem_bucket_name,
+    module.storage.alb_logs_bucket_name,
+    module.storage.cloudtrail_bucket_name
+  ] : []
+  macie_findings_bucket_name = var.enable_macie && var.environment == "production" ? module.storage.macie_findings_bucket_name : ""
+  s3_filesystem_kms_key_arn  = module.security.s3_filesystem_kms_key_arn
+
+  # Access Analyzer (production only)
+  enable_access_analyzer = var.enable_access_analyzer
+
+  # Backup Audit Manager (production only)
+  enable_backup_audit_manager = var.enable_backup_audit_manager
+  enable_hipaa_framework      = var.enable_hipaa_framework
+  backup_vault_arn            = var.backup_vault_arn
+  backup_kms_key_arn          = module.security.backup_kms_key_arn
+
+  # VPC Flow Logs
+  enable_vpc_flow_logs     = var.enable_vpc_flow_logs
+  flow_logs_retention_days = var.flow_logs_retention_days
+  flow_logs_traffic_type   = var.flow_logs_traffic_type
 }

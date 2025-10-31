@@ -354,7 +354,13 @@ variable "enable_ses" {
 }
 
 variable "ses_test_emails" {
-  description = "List of test email addresses for SES sandbox"
+  description = "List of individual test email addresses for SES sandbox (fallback option)"
+  type        = list(string)
+  default     = []
+}
+
+variable "ses_test_email_domains" {
+  description = "List of domains to verify for SES sandbox (allows sending to any email at these domains)"
   type        = list(string)
   default     = []
 }
@@ -434,4 +440,137 @@ variable "dmarc_record" {
   description = "DMARC TXT record value (only set for production)"
   type        = string
   default     = ""
+}
+
+# ========================================
+# OPTIONAL: Compliance and Auditing
+# ========================================
+
+# AWS Config
+variable "enable_aws_config" {
+  description = "Enable AWS Config for compliance tracking"
+  type        = bool
+  default     = true
+}
+
+variable "enable_hipaa_rules" {
+  description = "Enable HIPAA-specific AWS Config rules"
+  type        = bool
+  default     = true
+}
+
+# AWS Security Hub
+variable "enable_security_hub" {
+  description = "Enable AWS Security Hub for centralized security findings"
+  type        = bool
+  default     = true
+}
+
+variable "enable_cis_standard" {
+  description = "Enable CIS AWS Foundations Benchmark standard in Security Hub"
+  type        = bool
+  default     = true
+}
+
+variable "enable_pci_dss_standard" {
+  description = "Enable PCI DSS standard in Security Hub"
+  type        = bool
+  default     = false
+}
+
+variable "enable_aws_foundational_standard" {
+  description = "Enable AWS Foundational Security Best Practices standard in Security Hub"
+  type        = bool
+  default     = true
+}
+
+variable "security_hub_notification_emails" {
+  description = "Email addresses to notify for critical/high Security Hub findings"
+  type        = list(string)
+  default     = []
+}
+
+# AWS GuardDuty
+variable "enable_guardduty" {
+  description = "Enable AWS GuardDuty for threat detection"
+  type        = bool
+  default     = true
+}
+
+variable "guardduty_finding_frequency" {
+  description = "Frequency of GuardDuty findings (FIFTEEN_MINUTES, ONE_HOUR, SIX_HOURS)"
+  type        = string
+  default     = "FIFTEEN_MINUTES"
+  validation {
+    condition     = contains(["FIFTEEN_MINUTES", "ONE_HOUR", "SIX_HOURS"], var.guardduty_finding_frequency)
+    error_message = "Must be one of: FIFTEEN_MINUTES, ONE_HOUR, SIX_HOURS."
+  }
+}
+
+variable "guardduty_notification_emails" {
+  description = "Email addresses to notify for GuardDuty findings"
+  type        = list(string)
+  default     = []
+}
+
+# AWS Macie (Production Only)
+variable "enable_macie" {
+  description = "Enable AWS Macie for PHI/PII detection in S3 (production only)"
+  type        = bool
+  default     = false
+}
+
+variable "macie_finding_frequency" {
+  description = "Frequency of Macie findings (FIFTEEN_MINUTES, ONE_HOUR, SIX_HOURS)"
+  type        = string
+  default     = "ONE_HOUR"
+  validation {
+    condition     = contains(["FIFTEEN_MINUTES", "ONE_HOUR", "SIX_HOURS"], var.macie_finding_frequency)
+    error_message = "Must be one of: FIFTEEN_MINUTES, ONE_HOUR, SIX_HOURS."
+  }
+}
+
+# IAM Access Analyzer (Production Only)
+variable "enable_access_analyzer" {
+  description = "Enable IAM Access Analyzer to identify resources shared with external entities (production only)"
+  type        = bool
+  default     = false
+}
+
+# AWS Backup Audit Manager (Production Only)
+variable "enable_backup_audit_manager" {
+  description = "Enable AWS Backup Audit Manager for backup compliance auditing (production only)"
+  type        = bool
+  default     = false
+}
+
+variable "enable_hipaa_framework" {
+  description = "Enable HIPAA backup compliance framework in Backup Audit Manager"
+  type        = bool
+  default     = true
+}
+
+variable "backup_vault_arn" {
+  description = "Backup Vault ARN to audit (required when enable_backup_audit_manager = true)"
+  type        = string
+  default     = ""
+}
+
+# VPC Flow Logs
+variable "enable_vpc_flow_logs" {
+  description = "Enable VPC Flow Logs (required for HIPAA compliance)"
+  type        = bool
+  default     = true
+}
+
+variable "flow_logs_retention_days" {
+  description = "Number of days to retain VPC flow logs"
+  type        = number
+  default     = 90
+}
+
+variable "flow_logs_traffic_type" {
+  description = "Type of traffic to log (ACCEPT, REJECT, ALL)"
+  type        = string
+  default     = "ALL"
 }

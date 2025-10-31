@@ -38,6 +38,7 @@ resource "aws_elasticache_cluster" "redis" {
   # Enable automatic backups for data protection
   snapshot_retention_limit = var.snapshot_retention_limit
   snapshot_window          = var.snapshot_window
+  maintenance_window       = var.maintenance_window
 
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-${var.environment}-redis"

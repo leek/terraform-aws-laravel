@@ -1,0 +1,14 @@
+# Makefile.config.example
+# Copy this file to Makefile.config and customize for your local environment
+# Makefile.config is gitignored and won't be committed
+
+# Override these values as needed
+APP_NAME := laravel
+AWS_PROFILE :=
+AWS_REGION := us-east-1
+TF_DIR := terraform
+DOCKER_FILE := docker/Dockerfile
+SSH_KEY := ~/.ssh/$(APP_NAME)-bastion-key.pem
+DOCKER_PLATFORM := linux/amd64
+ECS_SERVICES := service queue-worker scheduler
+ENVIRONMENTS := staging uat production

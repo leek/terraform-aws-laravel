@@ -22,6 +22,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
+          ssh-key: ${{ secrets.DEPLOY_KEY }} # needed if branch is protected
           fetch-depth: 0
 
       - name: Setup PHP
@@ -53,7 +54,7 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v6
         with:
           commit_message: "chore: fix code style [skip ci]"
-          branch: ${{ github.head_ref || github.ref_name }}
+          branch: main
           file_pattern: "*.php *.js *.css *.json *.yml"
           commit_user_name: "github-actions[bot]"
           commit_user_email: "41898282+github-actions[bot]@users.noreply.github.com"

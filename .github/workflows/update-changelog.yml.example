@@ -4,6 +4,8 @@ on:
   workflow_run:
     workflows: ["Deploy to AWS ECS"]
     types: [completed]
+    branches:
+      - production
   workflow_dispatch:
     inputs:
       tag_name:

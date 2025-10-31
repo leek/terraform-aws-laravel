@@ -51,7 +51,7 @@ jobs:
             LATEST_TAG="${{ steps.latest_tag.outputs.latest_tag }}"
 
             if [ -z "$LATEST_TAG" ]; then
-              # No tags exist, start with YYYY.MM.0
+              # No tags exist, start with VERSION.0
               VERSION="${CURRENT_YEAR}.${CURRENT_MONTH}.0"
             else
               # Parse the latest tag (expected format: YYYY.MM.PATCH)

@@ -1,0 +1,157 @@
+name: Announce Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+jobs:
+  announce:
+    # Only run if PR was merged (not just closed) and modified CHANGELOG.md
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check if this is a changelog PR
+        id: check
+        run: |
+          # Check if CHANGELOG.md was modified
+          if git diff --name-only HEAD^ HEAD | grep -q "CHANGELOG.md"; then
+            echo "is_changelog_pr=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_changelog_pr=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Extract Latest Changelog
+        id: changelog
+        if: steps.check.outputs.is_changelog_pr == 'true'
+        run: |
+          # Skip Unreleased section and get the first real version section
+          # Extract from first non-Unreleased ## [ until the next ---
+          changelog=$(awk '
+            /^## \[/ && !/Unreleased/ { flag=1 }
+            flag { print }
+            /^---$/ && flag { exit }
+          ' CHANGELOG.md)
+
+          # Extract version and date
+          version=$(echo "$changelog" | grep -oP '## \[\K[^\]]+' | head -1)
+          date=$(echo "$changelog" | grep -oP '\] - \K[0-9-]+' | head -1)
+
+          # Extract sections - stop at "**Full Changelog**" or next section
+          added=$(echo "$changelog" | awk '
+            /^### Added$/ { flag=1; next }
+            /^### / || /^\*\*Full/ { flag=0 }
+            flag && /^- / { print }
+          ' | sed 's/^- /• /')
+
+          changed=$(echo "$changelog" | awk '
+            /^### Changed$/ { flag=1; next }
+            /^### / || /^\*\*Full/ { flag=0 }
+            flag && /^- / { print }
+          ' | sed 's/^- /• /')
+
+          fixed=$(echo "$changelog" | awk '
+            /^### Fixed$/ { flag=1; next }
+            /^### / || /^\*\*Full/ { flag=0 }
+            flag && /^- / { print }
+          ' | sed 's/^- /• /')
+
+          removed=$(echo "$changelog" | awk '
+            /^### Removed$/ { flag=1; next }
+            /^### / || /^\*\*Full/ { flag=0 }
+            flag && /^- / { print }
+          ' | sed 's/^- /• /')
+
+          security=$(echo "$changelog" | awk '
+            /^### Security$/ { flag=1; next }
+            /^### / || /^\*\*Full/ { flag=0 }
+            flag && /^- / { print }
+          ' | sed 's/^- /• /')
+
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "date=$date" >> $GITHUB_OUTPUT
+          echo "added<<EOF" >> $GITHUB_OUTPUT
+          echo "$added" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "changed<<EOF" >> $GITHUB_OUTPUT
+          echo "$changed" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "fixed<<EOF" >> $GITHUB_OUTPUT
+          echo "$fixed" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "removed<<EOF" >> $GITHUB_OUTPUT
+          echo "$removed" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "security<<EOF" >> $GITHUB_OUTPUT
+          echo "$security" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Extract the full changelog URL if it exists
+          full_changelog_url=$(echo "$changelog" | grep -oP '\*\*Full Changelog\*\*: \Khttps://[^\s]+' || echo "https://github.com/${{ github.repository }}/releases/tag/$version")
+          echo "full_changelog_url=$full_changelog_url" >> $GITHUB_OUTPUT
+
+      - name: Announce Release to Teams via Power Automate
+        if: steps.check.outputs.is_changelog_pr == 'true'
+        run: |
+          # Build body array with dynamic sections using jq
+          # Split each section into individual TextBlocks for proper line breaks
+          body=$(jq -n \
+            --arg version "${{ steps.changelog.outputs.version }}" \
+            --arg date "${{ steps.changelog.outputs.date }}" \
+            --arg actor "${{ github.actor }}" \
+            --arg added "${{ steps.changelog.outputs.added }}" \
+            --arg changed "${{ steps.changelog.outputs.changed }}" \
+            --arg fixed "${{ steps.changelog.outputs.fixed }}" \
+            --arg removed "${{ steps.changelog.outputs.removed }}" \
+            --arg security "${{ steps.changelog.outputs.security }}" \
+            '
+            [
+              {
+                type: "TextBlock",
+                text: ("🚀 Laravel " + $version + " Released"),
+                size: "Large",
+                weight: "Bolder",
+                color: "Accent"
+              },
+              {
+                type: "TextBlock",
+                text: ("Released on " + $date + " by " + $actor),
+                isSubtle: true,
+                spacing: "None"
+              }
+            ] +
+            (if $added != "" then
+              [{ type: "TextBlock", text: "**✨ Added**", weight: "Bolder", spacing: "Medium" }] +
+              ($added | split("\n") | map(select(. != "") | { type: "TextBlock", text: ., wrap: true, spacing: "Small" }))
+            else [] end) +
+            (if $changed != "" then
+              [{ type: "TextBlock", text: "**🔄 Changed**", weight: "Bolder", spacing: "Medium" }] +
+              ($changed | split("\n") | map(select(. != "") | { type: "TextBlock", text: ., wrap: true, spacing: "Small" }))
+            else [] end) +
+            (if $fixed != "" then
+              [{ type: "TextBlock", text: "**🐛 Fixed**", weight: "Bolder", spacing: "Medium" }] +
+              ($fixed | split("\n") | map(select(. != "") | { type: "TextBlock", text: ., wrap: true, spacing: "Small" }))
+            else [] end) +
+            (if $removed != "" then
+              [{ type: "TextBlock", text: "**🗑️ Removed**", weight: "Bolder", spacing: "Medium" }] +
+              ($removed | split("\n") | map(select(. != "") | { type: "TextBlock", text: ., wrap: true, spacing: "Small" }))
+            else [] end) +
+            (if $security != "" then
+              [{ type: "TextBlock", text: "**🔒 Security**", weight: "Bolder", spacing: "Medium" }] +
+              ($security | split("\n") | map(select(. != "") | { type: "TextBlock", text: ., wrap: true, spacing: "Small" }))
+            else [] end)
+          ')
+
+          # Build full Adaptive Card payload
+          #payload=$(jq -n \
+          #  --argjson body "$body" \
+          #  --arg releaseUrl "https://github.com/${{ github.repository }}/releases/tag/${{ steps.changelog.outputs.version }}" \
+          #  --arg changelogUrl "https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md" \
+          #  --arg fullChangelogUrl "${{ steps.changelog.outputs.full_changelog_url }}" \
