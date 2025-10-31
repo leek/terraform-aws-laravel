@@ -57,7 +57,7 @@ case "$CONTAINER_ROLE" in
                 SUPERVISOR_CONF="/etc/supervisor/conf.d/supervisord-web-octane-swoole.conf"
                 # Swap nginx config to use Octane reverse proxy
                 if [ -f /etc/nginx/custom.d/laravel.conf ]; then
-                    mv /etc/nginx/custom.d/laravel.conf /etc/nginx/custom.d/.laravel.conf.disabled
+                    mv /etc/nginx/custom.d/laravel.conf /etc/nginx/custom.d/.laravel.conf
                 fi
                 if [ -f /etc/nginx/custom.d/.laravel-octane.conf ]; then
                     mv /etc/nginx/custom.d/.laravel-octane.conf /etc/nginx/custom.d/laravel-octane.conf
@@ -68,7 +68,7 @@ case "$CONTAINER_ROLE" in
                 SUPERVISOR_CONF="/etc/supervisor/conf.d/supervisord-web-octane-roadrunner.conf"
                 # Swap nginx config to use Octane reverse proxy
                 if [ -f /etc/nginx/custom.d/laravel.conf ]; then
-                    mv /etc/nginx/custom.d/laravel.conf /etc/nginx/custom.d/.laravel.conf.disabled
+                    mv /etc/nginx/custom.d/laravel.conf /etc/nginx/custom.d/.laravel.conf
                 fi
                 if [ -f /etc/nginx/custom.d/.laravel-octane.conf ]; then
                     mv /etc/nginx/custom.d/.laravel-octane.conf /etc/nginx/custom.d/laravel-octane.conf
@@ -79,7 +79,7 @@ case "$CONTAINER_ROLE" in
                 SUPERVISOR_CONF="/etc/supervisor/conf.d/supervisord-web-octane-frankenphp.conf"
                 # Swap nginx config to use Octane reverse proxy
                 if [ -f /etc/nginx/custom.d/laravel.conf ]; then
-                    mv /etc/nginx/custom.d/laravel.conf /etc/nginx/custom.d/.laravel.conf.disabled
+                    mv /etc/nginx/custom.d/laravel.conf /etc/nginx/custom.d/.laravel.conf
                 fi
                 if [ -f /etc/nginx/custom.d/.laravel-octane.conf ]; then
                     mv /etc/nginx/custom.d/.laravel-octane.conf /etc/nginx/custom.d/laravel-octane.conf
@@ -89,8 +89,8 @@ case "$CONTAINER_ROLE" in
                 echo "Starting web server with PHP-FPM..."
                 SUPERVISOR_CONF="/etc/supervisor/conf.d/supervisord-web.conf"
                 # Ensure PHP-FPM config is active
-                if [ -f /etc/nginx/custom.d/.laravel.conf.disabled ]; then
-                    mv /etc/nginx/custom.d/.laravel.conf.disabled /etc/nginx/custom.d/laravel.conf
+                if [ -f /etc/nginx/custom.d/.laravel.conf ]; then
+                    mv /etc/nginx/custom.d/.laravel.conf /etc/nginx/custom.d/laravel.conf
                 fi
                 if [ -f /etc/nginx/custom.d/laravel-octane.conf ]; then
                     mv /etc/nginx/custom.d/laravel-octane.conf /etc/nginx/custom.d/.laravel-octane.conf

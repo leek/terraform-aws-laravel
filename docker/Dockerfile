@@ -139,11 +139,26 @@ RUN CACHE_STORE=array php -d memory_limit=512M artisan event:cache --no-interact
 
 # Download RoadRunner binary for Laravel Octane
 RUN set -o pipefail && \
-    curl -sSL https://github.com/roadrunner-server/roadrunner/releases/download/v2024.2.1/roadrunner-2024.2.1-linux-amd64.tar.gz \
+    ARCH=$(uname -m) && \
+    case "$ARCH" in \
+    x86_64) RR_ARCH="amd64" ;; \
+    aarch64) RR_ARCH="arm64" ;; \
+    arm64) RR_ARCH="arm64" ;; \
+    *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+    esac && \
+    curl -sSL https://github.com/roadrunner-server/roadrunner/releases/download/v2025.1.4/roadrunner-2025.1.4-linux-${RR_ARCH}.tar.gz \
     | tar -xz -C /usr/local/bin roadrunner && \
     chmod +x /usr/local/bin/roadrunner
+
 # Download FrankenPHP binary for Laravel Octane
-RUN curl -sSL https://github.com/dunglas/frankenphp/releases/download/v1.3.5/frankenphp-linux-x86_64 \
+RUN ARCH=$(uname -m) && \
+    case "$ARCH" in \
+    x86_64) FP_ARCH="x86_64" ;; \
+    aarch64) FP_ARCH="aarch64" ;; \
+    arm64) FP_ARCH="aarch64" ;; \
+    *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+    esac && \
+    curl -sSL https://github.com/dunglas/frankenphp/releases/download/v1.9.1/frankenphp-linux-${FP_ARCH} \
     -o /usr/local/bin/frankenphp && \
     chmod +x /usr/local/bin/frankenphp
 
@@ -177,7 +192,6 @@ COPY docker/supervisord-scheduler.conf /etc/supervisor/conf.d/supervisord-schedu
 COPY docker/entrypoint.sh /entrypoint.sh
 
 # Make entrypoint executable and create supervisor log directory
-# Disable Octane config by default (will be enabled by entrypoint.sh if APP_SERVER_MODE=octane)
 RUN chmod +x /entrypoint.sh \
     && mkdir -p /var/log/supervisor /etc/nginx/custom.d \
     && mkdir -p storage bootstrap/cache \
