@@ -209,7 +209,7 @@ variable "nightwatch_cpu" {
 }
 
 variable "nightwatch_memory" {
-  description = "Memory (MB) for the Nightwatch container"
+  description = "Memory for the Nightwatch container in MB"
   type        = number
   default     = 1024
 }

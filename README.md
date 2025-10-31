@@ -38,7 +38,7 @@ Production-ready AWS infrastructure for Laravel applications using Terraform. Th
 
 ## Architecture
 
-The infrastructure deploys three core ECS services (plus optional services):
+The infrastructure deploys three core ECS services, with optional Nightwatch service available:
 1. **Web Service** - Handles HTTP/HTTPS traffic through the ALB (auto-scales based on traffic)
 2. **Queue Worker Service** - Processes Laravel queue jobs from SQS (always runs 1 task)
 3. **Scheduler Service** - Runs Laravel's task scheduler (`php artisan schedule:work`) (always runs 1 task)
@@ -589,7 +589,7 @@ terraform/
 
 ### ECS Services
 
-The compute module deploys three core ECS services (plus optional services):
+The compute module deploys three core ECS services, with optional Nightwatch service available:
 
 - **Web Service**: Handles HTTP/HTTPS requests via the Application Load Balancer. Auto-scales based on CPU and memory utilization.
 - **Queue Worker Service**: Processes Laravel queue jobs from SQS. Runs continuously with 1 task by default.
