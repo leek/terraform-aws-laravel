@@ -94,3 +94,15 @@ resource "aws_ssm_parameter" "db_read_host" {
 
   tags = var.common_tags
 }
+
+# Nightwatch Token (optional)
+resource "aws_ssm_parameter" "nightwatch_token" {
+  count     = var.nightwatch_token != "" ? 1 : 0
+  name      = "/${var.app_name}/${var.environment}/NIGHTWATCH_TOKEN"
+  type      = "SecureString"
+  value     = var.nightwatch_token
+  key_id    = var.parameter_store_kms_key_id
+  overwrite = true
+
+  tags = var.common_tags
+}

@@ -209,6 +209,7 @@ module "configuration" {
   aws_region                 = var.aws_region
   aws_access_key_id          = module.security.laravel_user_access_key_id
   aws_secret_access_key      = module.security.laravel_user_secret_access_key
+  nightwatch_token           = var.nightwatch_token
   common_tags                = local.common_tags
 }
 
@@ -251,10 +252,11 @@ module "compute" {
   scheduler_desired_count = var.scheduler_desired_count
 
   # Nightwatch configuration
-  enable_nightwatch        = var.enable_nightwatch
-  nightwatch_cpu           = var.nightwatch_cpu
-  nightwatch_memory        = var.nightwatch_memory
-  nightwatch_desired_count = var.nightwatch_desired_count
+  enable_nightwatch                 = var.enable_nightwatch
+  nightwatch_token                  = var.nightwatch_token
+  nightwatch_request_sample_rate    = var.nightwatch_request_sample_rate
+  nightwatch_command_sample_rate    = var.nightwatch_command_sample_rate
+  nightwatch_exception_sample_rate  = var.nightwatch_exception_sample_rate
 
   meilisearch_host                 = var.enable_meilisearch ? module.meilisearch[0].meilisearch_host : ""
   meilisearch_master_key           = var.enable_meilisearch ? var.meilisearch_master_key : ""

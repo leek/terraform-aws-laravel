@@ -38,11 +38,12 @@ Production-ready AWS infrastructure for Laravel applications using Terraform. Th
 
 ## Architecture
 
-The infrastructure deploys three core ECS services (plus optional Nightwatch):
+The infrastructure deploys three separate ECS services:
 1. **Web Service** - Handles HTTP/HTTPS traffic through the ALB (auto-scales based on traffic)
 2. **Queue Worker Service** - Processes Laravel queue jobs from SQS (always runs 1 task)
 3. **Scheduler Service** - Runs Laravel's task scheduler (`php artisan schedule:work`) (always runs 1 task)
-4. **Nightwatch Service** (Optional) - Monitoring dashboard for queues, cache, and schedule (port 8080)
+
+**Optional:** When enabled, the **Nightwatch Agent** runs as a sidecar container in all task definitions to collect monitoring data.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -262,36 +263,47 @@ MAIL_MAILER=ses
 MAIL_FROM_ADDRESS=noreply@yourdomain.com
 ```
 
-### Enable Nightwatch (Monitoring Dashboard)
+### Enable Nightwatch (Monitoring Agent)
 
 ```hcl
-enable_nightwatch        = true
-nightwatch_cpu           = 256   # CPU units (256 = 0.25 vCPU)
-nightwatch_memory        = 512   # Memory in MB
-nightwatch_desired_count = 1     # Number of tasks
+enable_nightwatch                = true
+nightwatch_token                 = "your-nightwatch-token"  # Get from nightwatch.laravel.com
+nightwatch_request_sample_rate   = "0.1"   # Sample 10% of requests
+nightwatch_command_sample_rate   = "1.0"   # Sample 100% of commands
+nightwatch_exception_sample_rate = "1.0"   # Sample 100% of exceptions
 ```
 
 Laravel Nightwatch is a monitoring dashboard for Laravel applications that provides real-time insights into queues, cache, schedule, and other Laravel components.
 
-When enabled, a dedicated ECS service is created to run the Nightwatch dashboard on port 8080.
+When enabled, the `nightwatch-agent` container runs as a **sidecar** alongside your application containers in all ECS task definitions (web, queue-worker, and scheduler). This allows Nightwatch to collect metrics from all application components.
 
-**Installation in your Laravel application:**
+**Setup:**
 
-1. Install the Nightwatch package:
+1. Sign up at [nightwatch.laravel.com](https://nightwatch.laravel.com) to get your Nightwatch token
+
+2. Install the Nightwatch package in your Laravel application:
 ```bash
 composer require laravel/nightwatch
-```
-
-2. Publish the configuration:
-```bash
 php artisan nightwatch:install
 ```
 
-3. The Nightwatch dashboard will be accessible at `http://nightwatch-service:8080`
+3. Configure in your `tfvars`:
+```hcl
+enable_nightwatch = true
+nightwatch_token  = "nw_xxxxxxxxxxxxxxxxxxxxx"
+```
 
-For detailed setup instructions, see the [official Laravel Nightwatch documentation](https://nightwatch.laravel.com/docs/guides/docker).
+4. Deploy your infrastructure with `terraform apply`
 
-**Note**: The Nightwatch service runs as a separate container with `CONTAINER_ROLE=nightwatch` and automatically starts with `php artisan nightwatch:start`.
+The Nightwatch agent automatically collects and sends monitoring data to the Nightwatch dashboard. No additional configuration is needed in your application code.
+
+**Architecture:**
+- The `laravelphp/nightwatch-agent:v1` container runs as a non-essential sidecar
+- Agent includes health check via `php nightwatch-status`
+- Logs are sent to CloudWatch under the `nightwatch-agent` prefix
+- NIGHTWATCH_TOKEN is securely stored in AWS SSM Parameter Store
+
+For detailed setup instructions, see the [official Laravel Nightwatch Docker guide](https://nightwatch.laravel.com/docs/guides/docker).
 
 ### Enable Client VPN
 

@@ -78,3 +78,10 @@ variable "rds_read_replica_endpoint" {
   type        = string
   default     = ""
 }
+
+variable "nightwatch_token" {
+  description = "Nightwatch authentication token (optional)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

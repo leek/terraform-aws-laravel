@@ -39,11 +39,6 @@ output "scheduler_service_name" {
   value       = var.enable_scheduler ? aws_ecs_service.worker["scheduler"].name : null
 }
 
-output "nightwatch_service_name" {
-  description = "Name of the Nightwatch ECS service"
-  value       = var.enable_nightwatch ? aws_ecs_service.worker["nightwatch"].name : null
-}
-
 output "worker_services" {
   description = "Map of all worker service names"
   value       = { for k, v in aws_ecs_service.worker : k => v.name }

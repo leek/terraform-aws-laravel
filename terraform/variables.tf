@@ -353,27 +353,34 @@ variable "ses_test_emails" {
 # ========================================
 
 variable "enable_nightwatch" {
-  description = "Enable Laravel Nightwatch monitoring dashboard"
+  description = "Enable Laravel Nightwatch monitoring agent (runs as sidecar container)"
   type        = bool
   default     = false
 }
 
-variable "nightwatch_cpu" {
-  description = "CPU units for the Nightwatch container (256 = 0.25 vCPU, 512 = 0.5 vCPU)"
-  type        = number
-  default     = 256
+variable "nightwatch_token" {
+  description = "Nightwatch authentication token (required if enable_nightwatch = true)"
+  type        = string
+  sensitive   = true
+  default     = ""
 }
 
-variable "nightwatch_memory" {
-  description = "Memory for the Nightwatch container in MB"
-  type        = number
-  default     = 512
+variable "nightwatch_request_sample_rate" {
+  description = "Nightwatch request sampling rate (0.0 to 1.0)"
+  type        = string
+  default     = "0.1"
 }
 
-variable "nightwatch_desired_count" {
-  description = "Desired number of Nightwatch tasks (typically 1)"
-  type        = number
-  default     = 1
+variable "nightwatch_command_sample_rate" {
+  description = "Nightwatch command sampling rate (0.0 to 1.0)"
+  type        = string
+  default     = "1.0"
+}
+
+variable "nightwatch_exception_sample_rate" {
+  description = "Nightwatch exception sampling rate (0.0 to 1.0)"
+  type        = string
+  default     = "1.0"
 }
 
 # ========================================

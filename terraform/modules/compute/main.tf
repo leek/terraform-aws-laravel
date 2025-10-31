@@ -69,7 +69,20 @@ locals {
       name  = "AWS_URL"
       value = "https://${var.s3_filesystem_bucket_name}.s3.${var.aws_region}.amazonaws.com"
     }
-  ], var.additional_environment_variables)
+  ], var.enable_nightwatch ? [
+    {
+      name  = "NIGHTWATCH_REQUEST_SAMPLE_RATE"
+      value = var.nightwatch_request_sample_rate
+    },
+    {
+      name  = "NIGHTWATCH_COMMAND_SAMPLE_RATE"
+      value = var.nightwatch_command_sample_rate
+    },
+    {
+      name  = "NIGHTWATCH_EXCEPTION_SAMPLE_RATE"
+      value = var.nightwatch_exception_sample_rate
+    }
+  ] : [], var.additional_environment_variables)
 
   # Common secrets shared across all containers
   common_secrets = [
@@ -115,7 +128,40 @@ locals {
     }
   ]
 
-  # Worker services configuration (queue-worker, scheduler, and nightwatch)
+  # Nightwatch agent secrets (only included when enabled)
+  nightwatch_secrets = var.enable_nightwatch && var.nightwatch_token != "" ? [
+    {
+      name      = "NIGHTWATCH_TOKEN"
+      valueFrom = "arn:aws:ssm:${var.aws_region}:${var.caller_identity_account_id}:parameter/${var.app_name}/${var.environment}/NIGHTWATCH_TOKEN"
+    }
+  ] : []
+
+  # Nightwatch agent container definition
+  nightwatch_agent_container = var.enable_nightwatch ? [{
+    name      = "nightwatch-agent"
+    image     = "laravelphp/nightwatch-agent:v1"
+    essential = false
+
+    healthCheck = {
+      command  = ["CMD-SHELL", "php nightwatch-status"]
+      interval = 30
+      retries  = 3
+      timeout  = 5
+    }
+
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        awslogs-group         = var.log_group_name
+        awslogs-region        = var.aws_region
+        awslogs-stream-prefix = "nightwatch-agent"
+      }
+    }
+
+    secrets = local.nightwatch_secrets
+  }] : []
+
+  # Worker services configuration (queue-worker and scheduler)
   worker_services = {
     queue-worker = {
       enabled            = var.enable_queue_worker
@@ -138,22 +184,6 @@ locals {
       health_check_grace = null
       deployment_config  = {}
       log_stream_prefix  = "scheduler"
-    }
-    nightwatch = {
-      enabled            = var.enable_nightwatch
-      container_role     = "nightwatch"
-      cpu                = var.nightwatch_cpu
-      memory             = var.nightwatch_memory
-      desired_count      = var.nightwatch_desired_count
-      port_mappings = [
-        {
-          containerPort = 8080
-          protocol      = "tcp"
-        }
-      ]
-      health_check_grace = 60
-      deployment_config  = {}
-      log_stream_prefix  = "nightwatch"
     }
   }
 
@@ -212,7 +242,7 @@ resource "aws_ecs_task_definition" "main" {
   execution_role_arn       = var.ecs_execution_role_arn
   task_role_arn            = var.ecs_task_role_arn
 
-  container_definitions = jsonencode([
+  container_definitions = jsonencode(concat([
     {
       name      = "app"
       image     = "${var.ecr_repository_url}:latest"
@@ -226,7 +256,7 @@ resource "aws_ecs_task_definition" "main" {
       ]
 
       environment = local.common_environment_variables
-      secrets     = local.common_secrets
+      secrets     = concat(local.common_secrets, local.nightwatch_secrets)
 
       logConfiguration = {
         logDriver = "awslogs"
@@ -237,7 +267,7 @@ resource "aws_ecs_task_definition" "main" {
         }
       }
     }
-  ])
+  ], local.nightwatch_agent_container))
 
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-${var.environment}-task"
@@ -354,7 +384,7 @@ resource "aws_ecs_task_definition" "worker" {
   execution_role_arn       = var.ecs_execution_role_arn
   task_role_arn            = var.ecs_task_role_arn
 
-  container_definitions = jsonencode([
+  container_definitions = jsonencode(concat([
     {
       name      = each.key
       image     = "${var.ecr_repository_url}:latest"
@@ -369,7 +399,7 @@ resource "aws_ecs_task_definition" "worker" {
         }
       ], local.common_environment_variables)
 
-      secrets = local.common_secrets
+      secrets = concat(local.common_secrets, local.nightwatch_secrets)
 
       logConfiguration = {
         logDriver = "awslogs"
@@ -380,7 +410,7 @@ resource "aws_ecs_task_definition" "worker" {
         }
       }
     }
-  ])
+  ], local.nightwatch_agent_container))
 
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-${var.environment}-${each.key}-task"

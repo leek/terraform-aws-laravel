@@ -208,14 +208,17 @@ ses_test_emails = []
 # OPTIONAL: Nightwatch Configuration
 # ========================================
 
-# Enable Laravel Nightwatch monitoring dashboard
-# Set to true to enable Nightwatch for monitoring queues, cache, schedule, etc.
+# Enable Laravel Nightwatch monitoring agent (runs as sidecar container)
+# When enabled, adds the nightwatch-agent container to all task definitions
 enable_nightwatch = false
 
-# Nightwatch resource configuration
-# nightwatch_cpu           = 256  # CPU units (256 = 0.25 vCPU)
-# nightwatch_memory        = 512  # Memory in MB
-# nightwatch_desired_count = 1    # Number of Nightwatch tasks
+# Nightwatch authentication token (required if enable_nightwatch = true)
+# nightwatch_token = "your-nightwatch-token-here"
+
+# Nightwatch sampling rates (optional, defaults shown)
+# nightwatch_request_sample_rate    = "0.1"  # 10% of requests
+# nightwatch_command_sample_rate    = "1.0"  # 100% of commands
+# nightwatch_exception_sample_rate  = "1.0"  # 100% of exceptions
 
 # ========================================
 # OPTIONAL: Monitoring Configuration
