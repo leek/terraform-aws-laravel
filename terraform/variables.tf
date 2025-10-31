@@ -102,6 +102,17 @@ variable "max_capacity" {
   default     = 10
 }
 
+# Application Server Mode
+variable "app_server_mode" {
+  description = "Application server mode: 'php-fpm' (default), 'octane-swoole', 'octane-frankenphp', or 'octane-roadrunner'. Octane modes provide better performance for Laravel applications."
+  type        = string
+  default     = "php-fpm"
+  validation {
+    condition     = contains(["php-fpm", "octane-swoole", "octane-frankenphp", "octane-roadrunner"], var.app_server_mode)
+    error_message = "app_server_mode must be one of: 'php-fpm', 'octane-swoole', 'octane-frankenphp', or 'octane-roadrunner'"
+  }
+}
+
 # Queue Worker (processes background jobs)
 variable "queue_worker_cpu" {
   description = "CPU units for the queue worker container (256 = 0.25 vCPU, 512 = 0.5 vCPU, 1024 = 1 vCPU)"

@@ -11,6 +11,9 @@ set -e
 # This can be set via environment variable CONTAINER_ROLE
 CONTAINER_ROLE=${CONTAINER_ROLE:-web}
 
+# Determine application server mode (php-fpm or octane)
+APP_SERVER_MODE=${APP_SERVER_MODE:-php-fpm}
+
 # Create .env file from .env.example if it doesn't exist
 if [ ! -f /var/www/html/.env ]; then
     echo "Creating .env file from .env.example..."
@@ -47,8 +50,53 @@ php artisan config:cache --no-interaction || true
 # Select the appropriate supervisord config based on container role
 case "$CONTAINER_ROLE" in
     web)
-        echo "Starting web server..."
-        SUPERVISOR_CONF="/etc/supervisor/conf.d/supervisord-web.conf"
+        # Select web server config based on APP_SERVER_MODE
+        case "$APP_SERVER_MODE" in
+            octane-swoole)
+                echo "Starting web server with Laravel Octane (Swoole)..."
+                SUPERVISOR_CONF="/etc/supervisor/conf.d/supervisord-web-octane-swoole.conf"
+                # Swap nginx config to use Octane reverse proxy
+                if [ -f /etc/nginx/custom.d/laravel.conf ]; then
+                    mv /etc/nginx/custom.d/laravel.conf /etc/nginx/custom.d/.laravel.conf
+                fi
+                if [ -f /etc/nginx/custom.d/.laravel-octane.conf ]; then
+                    mv /etc/nginx/custom.d/.laravel-octane.conf /etc/nginx/custom.d/laravel-octane.conf
+                fi
+                ;;
+            octane-roadrunner)
+                echo "Starting web server with Laravel Octane (RoadRunner)..."
+                SUPERVISOR_CONF="/etc/supervisor/conf.d/supervisord-web-octane-roadrunner.conf"
+                # Swap nginx config to use Octane reverse proxy
+                if [ -f /etc/nginx/custom.d/laravel.conf ]; then
+                    mv /etc/nginx/custom.d/laravel.conf /etc/nginx/custom.d/.laravel.conf
+                fi
+                if [ -f /etc/nginx/custom.d/.laravel-octane.conf ]; then
+                    mv /etc/nginx/custom.d/.laravel-octane.conf /etc/nginx/custom.d/laravel-octane.conf
+                fi
+                ;;
+            octane-frankenphp)
+                echo "Starting web server with Laravel Octane (FrankenPHP)..."
+                SUPERVISOR_CONF="/etc/supervisor/conf.d/supervisord-web-octane-frankenphp.conf"
+                # Swap nginx config to use Octane reverse proxy
+                if [ -f /etc/nginx/custom.d/laravel.conf ]; then
+                    mv /etc/nginx/custom.d/laravel.conf /etc/nginx/custom.d/.laravel.conf
+                fi
+                if [ -f /etc/nginx/custom.d/.laravel-octane.conf ]; then
+                    mv /etc/nginx/custom.d/.laravel-octane.conf /etc/nginx/custom.d/laravel-octane.conf
+                fi
+                ;;
+            php-fpm|*)
+                echo "Starting web server with PHP-FPM..."
+                SUPERVISOR_CONF="/etc/supervisor/conf.d/supervisord-web.conf"
+                # Ensure PHP-FPM config is active
+                if [ -f /etc/nginx/custom.d/.laravel.conf ]; then
+                    mv /etc/nginx/custom.d/.laravel.conf /etc/nginx/custom.d/laravel.conf
+                fi
+                if [ -f /etc/nginx/custom.d/laravel-octane.conf ]; then
+                    mv /etc/nginx/custom.d/laravel-octane.conf /etc/nginx/custom.d/.laravel-octane.conf
+                fi
+                ;;
+        esac
         ;;
     queue-worker)
         echo "Starting queue worker..."

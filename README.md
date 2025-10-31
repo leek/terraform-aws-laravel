@@ -153,6 +153,37 @@ aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_
 
 ## Configuration Guide
 
+### Application Server Mode
+
+Choose between **PHP-FPM** (default) or **Laravel Octane** with your preferred driver:
+
+```hcl
+# Traditional PHP-FPM with Nginx (default, most compatible)
+app_server_mode = "php-fpm"
+
+# Laravel Octane with Swoole (battle-tested, excellent performance)
+app_server_mode = "octane-swoole"
+
+# Laravel Octane with RoadRunner (Go-based, great for long-running tasks)
+app_server_mode = "octane-roadrunner"
+
+# Laravel Octane with FrankenPHP (modern, includes Early Hints support)
+app_server_mode = "octane-frankenphp"
+```
+
+**Octane Driver Comparison:**
+- **Swoole**: Battle-tested, excellent performance, requires Swoole PHP extension
+- **RoadRunner**: Go-based server, great for long-running tasks, excellent stability
+- **FrankenPHP**: Modern PHP app server built on Caddy, supports Early Hints and modern HTTP features
+
+**Laravel Octane Benefits:**
+- 2-5x better request throughput
+- Lower latency for API responses
+- Reduced memory usage per request
+- Better for high-traffic applications
+
+**Important:** Ensure your Laravel application is installed with the Octane package and is compatible with Octane (no global state, stateless services). See [Laravel Octane documentation](https://laravel.com/docs/octane) for details.
+
 ### Minimal Configuration
 
 For a basic setup (good for staging/development):
@@ -166,6 +197,9 @@ github_repo = "your-repo"
 
 app_db_password       = "..."
 db_reporting_password = "..."
+
+# Application server mode
+app_server_mode      = "php-fpm"  # or "octane-swoole", "octane-roadrunner", or "octane-frankenphp" for better performance
 
 # Small instance sizes
 container_cpu        = 512
@@ -201,6 +235,9 @@ github_repo = "your-repo"
 app_db_password       = "..."
 db_reporting_password = "..."
 
+# Use Laravel Octane for better performance in production (choose your preferred driver)
+app_server_mode      = "octane-swoole"  # or "octane-roadrunner" or "octane-frankenphp"
+
 # Larger instance sizes
 container_cpu        = 2048
 container_memory     = 4096
@@ -229,6 +266,110 @@ healthcheck_alarm_emails = ["ops@example.com"]
 ```
 
 **Estimated cost**: ~$300-500/month
+
+## Switching Between PHP-FPM and Octane
+
+You can switch between PHP-FPM and Laravel Octane (with any driver) at any time by updating your Terraform configuration:
+
+### Prerequisites for Octane
+
+Before switching to Octane, ensure your Laravel application:
+
+1. **Has Laravel Octane installed:**
+   ```bash
+   composer require laravel/octane
+   
+   # Install your preferred server
+   php artisan octane:install --server=swoole      # For Swoole
+   php artisan octane:install --server=roadrunner  # For RoadRunner
+   php artisan octane:install --server=frankenphp  # For FrankenPHP
+   ```
+
+2. **Is Octane-compatible:**
+   - No reliance on global state or static variables
+   - Uses dependency injection properly
+   - Stateless service classes
+   - See [Laravel Octane documentation](https://laravel.com/docs/octane#introduction) for details
+
+### Switching to Octane
+
+1. Update your `.tfvars` file with your preferred driver:
+   ```hcl
+   app_server_mode = "octane-swoole"       # Most battle-tested
+   # OR
+   app_server_mode = "octane-roadrunner"   # Great for long-running tasks
+   # OR
+   app_server_mode = "octane-frankenphp"   # Modern with Early Hints support
+   ```
+
+2. Apply the Terraform changes:
+   ```bash
+   terraform apply -var-file="environments/production.tfvars"
+   ```
+
+3. Deploy your updated Docker image (with Octane installed) and force a new ECS deployment:
+   ```bash
+   # The new tasks will automatically start with your chosen Octane driver
+   aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_service_name) --force-new-deployment
+   ```
+
+### Switching Back to PHP-FPM
+
+If you need to revert to PHP-FPM:
+
+1. Update your `.tfvars` file:
+   ```hcl
+   app_server_mode = "php-fpm"
+   ```
+
+2. Apply the Terraform changes and redeploy:
+   ```bash
+   terraform apply -var-file="environments/production.tfvars"
+   aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_service_name) --force-new-deployment
+   ```
+
+### Testing Your Configuration
+
+Test Octane locally before deploying to production:
+
+```bash
+# Build and run locally with Octane
+docker build -f docker/Dockerfile -t myapp .
+
+# Generate an APP_KEY first (use an existing Laravel project or Docker)
+# Option 1: From your Laravel project directory
+APP_KEY=$(php artisan key:generate --show)
+
+# Option 2: Or generate inside a temporary container
+APP_KEY=$(docker run --rm myapp php artisan key:generate --show)
+
+# Run with Octane Swoole
+docker run -p 8080:80 \
+  -e APP_ENV=local \
+  -e CONTAINER_ROLE=web \
+  -e APP_SERVER_MODE=octane-swoole \
+  -e APP_KEY=$APP_KEY \
+  myapp
+
+# Or run with Octane RoadRunner
+docker run -p 8080:80 \
+  -e APP_ENV=local \
+  -e CONTAINER_ROLE=web \
+  -e APP_SERVER_MODE=octane-roadrunner \
+  -e APP_KEY=$APP_KEY \
+  myapp
+
+# Or run with Octane FrankenPHP
+docker run -p 8080:80 \
+  -e APP_ENV=local \
+  -e CONTAINER_ROLE=web \
+  -e APP_SERVER_MODE=octane-frankenphp \
+  -e APP_KEY=$APP_KEY \
+  myapp
+
+# Test in browser
+curl http://localhost:8080
+```
 
 ## Optional Features
 

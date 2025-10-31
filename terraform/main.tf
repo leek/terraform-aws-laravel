@@ -263,6 +263,7 @@ module "compute" {
   meilisearch_master_key           = var.enable_meilisearch ? var.meilisearch_master_key : ""
   redis_endpoint                   = module.cache.redis_endpoint
   redis_port                       = module.cache.redis_port
+  app_server_mode                  = var.app_server_mode
   additional_environment_variables = var.additional_environment_variables
   common_tags                      = local.common_tags
 }

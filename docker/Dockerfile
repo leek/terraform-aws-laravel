@@ -53,9 +53,9 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     zip \
     pcntl \
     sockets \
-    # PECL
-    && pecl install redis \
-    && docker-php-ext-enable redis \
+    # PECL - Install redis and swoole (for Laravel Octane with Swoole)
+    && pecl install redis swoole \
+    && docker-php-ext-enable redis swoole \
     # Cleanup after PHP extensions are built
     && apk del build-base autoconf automake libtool nasm git \
     && rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
@@ -137,6 +137,31 @@ RUN CACHE_STORE=array php -d memory_limit=512M artisan event:cache --no-interact
     CACHE_STORE=array php -d memory_limit=512M artisan icons:cache --no-interaction --no-ansi && \
     CACHE_STORE=array php -d memory_limit=512M artisan filament:cache-components --no-interaction --no-ansi
 
+# Download RoadRunner binary for Laravel Octane
+RUN set -o pipefail && \
+    ARCH=$(uname -m) && \
+    case "$ARCH" in \
+    x86_64) RR_ARCH="amd64" ;; \
+    aarch64) RR_ARCH="arm64" ;; \
+    arm64) RR_ARCH="arm64" ;; \
+    *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+    esac && \
+    curl -sSL https://github.com/roadrunner-server/roadrunner/releases/download/v2025.1.4/roadrunner-2025.1.4-linux-${RR_ARCH}.tar.gz \
+    | tar -xz -C /usr/local/bin roadrunner && \
+    chmod +x /usr/local/bin/roadrunner
+
+# Download FrankenPHP binary for Laravel Octane
+RUN ARCH=$(uname -m) && \
+    case "$ARCH" in \
+    x86_64) FP_ARCH="x86_64" ;; \
+    aarch64) FP_ARCH="aarch64" ;; \
+    arm64) FP_ARCH="aarch64" ;; \
+    *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+    esac && \
+    curl -sSL https://github.com/dunglas/frankenphp/releases/download/v1.9.1/frankenphp-linux-${FP_ARCH} \
+    -o /usr/local/bin/frankenphp && \
+    chmod +x /usr/local/bin/frankenphp
+
 # ========================================
 # Stage 3: Final application image
 # ========================================
@@ -148,6 +173,10 @@ WORKDIR /var/www/html
 # Copy built application from the builder stage
 COPY --from=builder --chown=www-data:www-data /var/www/html .
 
+# Copy Octane binaries from builder stage
+COPY --from=builder /usr/local/bin/roadrunner /usr/local/bin/roadrunner
+COPY --from=builder /usr/local/bin/frankenphp /usr/local/bin/frankenphp
+
 # Copy configuration files
 COPY docker/.profile /root/.profile
 COPY --chown=www-data:www-data docker/nginx/ /etc/nginx
@@ -155,6 +184,9 @@ COPY docker/php/php-fpm.conf /usr/local/etc/php-fpm.d/www.conf
 COPY docker/php/php.ini /usr/local/etc/php/conf.d/99-custom.ini
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/supervisord-web.conf /etc/supervisor/conf.d/supervisord-web.conf
+COPY docker/supervisord-web-octane-swoole.conf /etc/supervisor/conf.d/supervisord-web-octane-swoole.conf
+COPY docker/supervisord-web-octane-roadrunner.conf /etc/supervisor/conf.d/supervisord-web-octane-roadrunner.conf
+COPY docker/supervisord-web-octane-frankenphp.conf /etc/supervisor/conf.d/supervisord-web-octane-frankenphp.conf
 COPY docker/supervisord-queue-worker.conf /etc/supervisor/conf.d/supervisord-queue-worker.conf
 COPY docker/supervisord-scheduler.conf /etc/supervisor/conf.d/supervisord-scheduler.conf
 COPY docker/entrypoint.sh /entrypoint.sh
