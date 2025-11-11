@@ -214,9 +214,9 @@ enable_meilisearch = true
 # Enable Laravel Nightwatch monitoring (runs as a sidecar container)
 enable_nightwatch = false
 
-# Nightwatch API key from nightwatch.laravel.com
+# Nightwatch token from nightwatch.laravel.com
 # IMPORTANT: Keep this secret! Consider using environment variables or a secrets manager.
-nightwatch_api_key = ""
+nightwatch_token = ""
 
 # Sample rates control what percentage of events are sent to Nightwatch
 # Lower rates reduce costs and agent overhead in high-traffic applications
@@ -314,7 +314,8 @@ additional_environment_variables = [
   { name = "LOG_STACK", value = "daily,sentry" },
 
   # Monitoring
-  { name = "PULSE_ENABLED", value = "true" },
+  { name = "PULSE_ENABLED", value = "false" },
+  { name = "TELESCOPE_ENABLED", value = "false" },
 
   # Add your custom environment variables here:
   # { name = "CUSTOM_FEATURE_FLAG", value = "enabled" },

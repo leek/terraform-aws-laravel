@@ -404,8 +404,8 @@ MAIL_FROM_ADDRESS=noreply@yourdomain.com
 ### Enable Laravel Nightwatch (Monitoring)
 
 ```hcl
-enable_nightwatch    = true
-nightwatch_api_key   = "your-api-key-from-nightwatch.laravel.com"
+enable_nightwatch  = true
+nightwatch_token   = "your-token-from-nightwatch.laravel.com"
 
 # Optional: Adjust sample rates to control costs and overhead
 nightwatch_request_sample_rate   = 0.1  # 10% of requests

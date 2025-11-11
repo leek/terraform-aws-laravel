@@ -214,8 +214,8 @@ variable "enable_nightwatch" {
   default     = false
 }
 
-variable "nightwatch_api_key" {
-  description = "Laravel Nightwatch API key"
+variable "nightwatch_token" {
+  description = "Laravel Nightwatch token from nightwatch.laravel.com dashboard (used as NIGHTWATCH_TOKEN for both app and agent)"
   type        = string
   sensitive   = true
   default     = ""

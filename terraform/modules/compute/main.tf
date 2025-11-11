@@ -2,16 +2,11 @@
 # Locals - Shared Configuration
 # ========================================
 
-# Generate a random token for Nightwatch agent communication
-resource "random_password" "nightwatch_token" {
-  count   = var.enable_nightwatch ? 1 : 0
-  length  = 32
-  special = false
-}
-
 locals {
   # Nightwatch configuration
-  nightwatch_token = var.enable_nightwatch ? random_password.nightwatch_token[0].result : ""
+  # Use the token from the dashboard as the NIGHTWATCH_TOKEN
+  # This token is used for both app->agent and agent->cloud authentication
+  nightwatch_token = var.enable_nightwatch ? var.nightwatch_token : ""
 
   # Common environment variables shared across all containers
   common_environment_variables = concat([
@@ -279,10 +274,6 @@ resource "aws_ecs_task_definition" "main" {
         {
           name  = "NIGHTWATCH_TOKEN"
           value = local.nightwatch_token
-        },
-        {
-          name  = "NIGHTWATCH_API_KEY"
-          value = var.nightwatch_api_key
         }
       ]
 
@@ -457,10 +448,6 @@ resource "aws_ecs_task_definition" "worker" {
         {
           name  = "NIGHTWATCH_TOKEN"
           value = local.nightwatch_token
-        },
-        {
-          name  = "NIGHTWATCH_API_KEY"
-          value = var.nightwatch_api_key
         }
       ]
 

@@ -268,7 +268,7 @@ module "compute" {
 
   # Nightwatch configuration
   enable_nightwatch                = var.enable_nightwatch
-  nightwatch_api_key               = var.nightwatch_api_key
+  nightwatch_token                 = var.nightwatch_token
   nightwatch_request_sample_rate   = var.nightwatch_request_sample_rate
   nightwatch_command_sample_rate   = var.nightwatch_command_sample_rate
   nightwatch_exception_sample_rate = var.nightwatch_exception_sample_rate
