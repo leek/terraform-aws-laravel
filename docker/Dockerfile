@@ -141,9 +141,12 @@ RUN set -o pipefail && \
     arm64) RR_ARCH="arm64" ;; \
     *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
     esac && \
+    mkdir -p /tmp/rr && \
     curl -sSL https://github.com/roadrunner-server/roadrunner/releases/download/v2025.1.4/roadrunner-2025.1.4-linux-${RR_ARCH}.tar.gz \
-    | tar -xz -C /usr/local/bin roadrunner && \
-    chmod +x /usr/local/bin/roadrunner
+    | tar -xz -C /tmp/rr && \
+    find /tmp/rr -type f \( -name 'rr' -o -name 'roadrunner' \) | head -1 | xargs -I {} mv {} /usr/local/bin/roadrunner && \
+    chmod +x /usr/local/bin/roadrunner && \
+    rm -rf /tmp/rr
 
 # Download FrankenPHP binary for Laravel Octane
 RUN ARCH=$(uname -m) && \

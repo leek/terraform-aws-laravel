@@ -287,7 +287,6 @@ additional_environment_variables = [
   { name = "SESSION_LIFETIME", value = "120" },
   { name = "SESSION_ENCRYPT", value = "false" },
   { name = "SESSION_PATH", value = "/" },
-  { name = "SESSION_DOMAIN", value = "" },
   { name = "SESSION_SECURE_COOKIE", value = "true" },
   { name = "SESSION_SAME_SITE", value = "strict" },
   { name = "REDIS_CLIENT", value = "phpredis" },
