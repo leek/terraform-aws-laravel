@@ -177,7 +177,6 @@ COPY docker/.profile /root/.profile
 COPY --chown=www-data:www-data docker/nginx/ /etc/nginx
 COPY docker/php/php-fpm.conf /usr/local/etc/php-fpm.d/www.conf
 COPY docker/php/php.ini /usr/local/etc/php/conf.d/99-custom.ini
-COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/supervisord-web.conf /etc/supervisor/conf.d/supervisord-web.conf
 COPY docker/supervisord-web-octane-swoole.conf /etc/supervisor/conf.d/supervisord-web-octane-swoole.conf
 COPY docker/supervisord-web-octane-roadrunner.conf /etc/supervisor/conf.d/supervisord-web-octane-roadrunner.conf
