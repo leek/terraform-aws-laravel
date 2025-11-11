@@ -23,6 +23,7 @@ Production-ready AWS infrastructure for Laravel applications using Terraform. Th
 ### Optional Features
 - **Meilisearch** - Fast, typo-tolerant search engine (optional)
 - **AWS SES** - Email sending capability (optional)
+- **Laravel Nightwatch** - Production monitoring and performance insights (optional)
 - **Client VPN** - Secure remote access to VPC (optional)
 - **Bastion Host** - Secure database access (optional)
 - **CloudTrail** - API audit logging (optional)
@@ -399,6 +400,37 @@ Laravel configuration:
 MAIL_MAILER=ses
 MAIL_FROM_ADDRESS=noreply@yourdomain.com
 ```
+
+### Enable Laravel Nightwatch (Monitoring)
+
+```hcl
+enable_nightwatch    = true
+nightwatch_api_key   = "your-api-key-from-nightwatch.laravel.com"
+
+# Optional: Adjust sample rates to control costs and overhead
+nightwatch_request_sample_rate   = 0.1  # 10% of requests
+nightwatch_command_sample_rate   = 1.0  # 100% of commands
+nightwatch_exception_sample_rate = 1.0  # 100% of exceptions
+```
+
+**How it works:**
+- Nightwatch runs as a sidecar container alongside your Laravel application
+- The agent is added to all three services: web, queue worker, and scheduler
+- Your Laravel app communicates with the agent via localhost on port 2407
+- A secure random token is automatically generated for communication
+
+**Prerequisites:**
+1. Sign up at [nightwatch.laravel.com](https://nightwatch.laravel.com)
+2. Install the Nightwatch package in your Laravel application:
+   ```bash
+   composer require laravel/nightwatch
+   ```
+3. Minimum version: `laravel/nightwatch` v1.11.0 or later
+
+**Notes:**
+- The agent is marked as `essential = false`, so your app will continue running if the agent fails
+- Agent logs are available in CloudWatch under the `nightwatch` stream prefix
+- Sample rates help reduce costs in high-traffic applications while still capturing important events
 
 ### Enable Client VPN
 

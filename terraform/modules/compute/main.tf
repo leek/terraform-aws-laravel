@@ -2,7 +2,17 @@
 # Locals - Shared Configuration
 # ========================================
 
+# Generate a random token for Nightwatch agent communication
+resource "random_password" "nightwatch_token" {
+  count   = var.enable_nightwatch ? 1 : 0
+  length  = 32
+  special = false
+}
+
 locals {
+  # Nightwatch configuration
+  nightwatch_token = var.enable_nightwatch ? random_password.nightwatch_token[0].result : ""
+
   # Common environment variables shared across all containers
   common_environment_variables = concat([
     {
@@ -73,7 +83,28 @@ locals {
       name  = "AWS_URL"
       value = "https://${var.s3_filesystem_bucket_name}.s3.${var.aws_region}.amazonaws.com"
     }
-  ], var.additional_environment_variables)
+    ], var.additional_environment_variables, var.enable_nightwatch ? [
+    {
+      name  = "NIGHTWATCH_TOKEN"
+      value = local.nightwatch_token
+    },
+    {
+      name  = "NIGHTWATCH_INGEST_URI"
+      value = "http://localhost:2407"
+    },
+    {
+      name  = "NIGHTWATCH_REQUEST_SAMPLE_RATE"
+      value = tostring(var.nightwatch_request_sample_rate)
+    },
+    {
+      name  = "NIGHTWATCH_COMMAND_SAMPLE_RATE"
+      value = tostring(var.nightwatch_command_sample_rate)
+    },
+    {
+      name  = "NIGHTWATCH_EXCEPTION_SAMPLE_RATE"
+      value = tostring(var.nightwatch_exception_sample_rate)
+    }
+  ] : [])
 
   # Common secrets shared across all containers
   common_secrets = [
@@ -200,7 +231,7 @@ resource "aws_ecs_task_definition" "main" {
   execution_role_arn       = var.ecs_execution_role_arn
   task_role_arn            = var.ecs_task_role_arn
 
-  container_definitions = jsonencode([
+  container_definitions = jsonencode(concat([
     {
       name      = "app"
       image     = "${var.ecr_repository_url}:latest"
@@ -225,7 +256,42 @@ resource "aws_ecs_task_definition" "main" {
         }
       }
     }
-  ])
+    ], var.enable_nightwatch ? [
+    {
+      name      = "nightwatch-agent"
+      image     = var.nightwatch_agent_image
+      essential = false
+      cpu       = var.nightwatch_agent_cpu
+      memory    = var.nightwatch_agent_memory
+
+      portMappings = [
+        {
+          containerPort = 2407
+          protocol      = "tcp"
+        }
+      ]
+
+      environment = [
+        {
+          name  = "NIGHTWATCH_TOKEN"
+          value = local.nightwatch_token
+        },
+        {
+          name  = "NIGHTWATCH_API_KEY"
+          value = var.nightwatch_api_key
+        }
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = var.log_group_name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "nightwatch"
+        }
+      }
+    }
+  ] : []))
 
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-${var.environment}-task"
@@ -342,7 +408,7 @@ resource "aws_ecs_task_definition" "worker" {
   execution_role_arn       = var.ecs_execution_role_arn
   task_role_arn            = var.ecs_task_role_arn
 
-  container_definitions = jsonencode([
+  container_definitions = jsonencode(concat([
     {
       name      = each.key
       image     = "${var.ecr_repository_url}:latest"
@@ -368,7 +434,42 @@ resource "aws_ecs_task_definition" "worker" {
         }
       }
     }
-  ])
+    ], var.enable_nightwatch ? [
+    {
+      name      = "nightwatch-agent"
+      image     = var.nightwatch_agent_image
+      essential = false
+      cpu       = var.nightwatch_agent_cpu
+      memory    = var.nightwatch_agent_memory
+
+      portMappings = [
+        {
+          containerPort = 2407
+          protocol      = "tcp"
+        }
+      ]
+
+      environment = [
+        {
+          name  = "NIGHTWATCH_TOKEN"
+          value = local.nightwatch_token
+        },
+        {
+          name  = "NIGHTWATCH_API_KEY"
+          value = var.nightwatch_api_key
+        }
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = var.log_group_name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "nightwatch-${each.key}"
+        }
+      }
+    }
+  ] : []))
 
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-${var.environment}-${each.key}-task"

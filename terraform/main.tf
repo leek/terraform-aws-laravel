@@ -265,7 +265,18 @@ module "compute" {
   redis_port                       = module.cache.redis_port
   app_server_mode                  = var.app_server_mode
   additional_environment_variables = var.additional_environment_variables
-  common_tags                      = local.common_tags
+
+  # Nightwatch configuration
+  enable_nightwatch                = var.enable_nightwatch
+  nightwatch_api_key               = var.nightwatch_api_key
+  nightwatch_request_sample_rate   = var.nightwatch_request_sample_rate
+  nightwatch_command_sample_rate   = var.nightwatch_command_sample_rate
+  nightwatch_exception_sample_rate = var.nightwatch_exception_sample_rate
+  nightwatch_agent_image           = var.nightwatch_agent_image
+  nightwatch_agent_cpu             = var.nightwatch_agent_cpu
+  nightwatch_agent_memory          = var.nightwatch_agent_memory
+
+  common_tags = local.common_tags
 }
 
 # DNS (Route53 records)

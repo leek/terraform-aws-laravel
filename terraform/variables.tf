@@ -344,6 +344,71 @@ variable "enable_meilisearch" {
 }
 
 # ========================================
+# OPTIONAL: Laravel Nightwatch
+# ========================================
+
+variable "enable_nightwatch" {
+  description = "Enable Laravel Nightwatch monitoring as a sidecar container"
+  type        = bool
+  default     = false
+}
+
+variable "nightwatch_api_key" {
+  description = "Laravel Nightwatch API key from nightwatch.laravel.com (only required if enable_nightwatch = true)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "nightwatch_request_sample_rate" {
+  description = "Request sample rate for Nightwatch (0.0 to 1.0). Example: 0.1 = 10% of requests"
+  type        = number
+  default     = 0.1
+  validation {
+    condition     = var.nightwatch_request_sample_rate >= 0 && var.nightwatch_request_sample_rate <= 1
+    error_message = "Request sample rate must be between 0.0 and 1.0"
+  }
+}
+
+variable "nightwatch_command_sample_rate" {
+  description = "Command sample rate for Nightwatch (0.0 to 1.0). Example: 1.0 = 100% of commands"
+  type        = number
+  default     = 1.0
+  validation {
+    condition     = var.nightwatch_command_sample_rate >= 0 && var.nightwatch_command_sample_rate <= 1
+    error_message = "Command sample rate must be between 0.0 and 1.0"
+  }
+}
+
+variable "nightwatch_exception_sample_rate" {
+  description = "Exception sample rate for Nightwatch (0.0 to 1.0). Example: 1.0 = 100% of exceptions"
+  type        = number
+  default     = 1.0
+  validation {
+    condition     = var.nightwatch_exception_sample_rate >= 0 && var.nightwatch_exception_sample_rate <= 1
+    error_message = "Exception sample rate must be between 0.0 and 1.0"
+  }
+}
+
+variable "nightwatch_agent_image" {
+  description = "Docker image for Nightwatch agent"
+  type        = string
+  default     = "laravelphp/nightwatch-agent:v1"
+}
+
+variable "nightwatch_agent_cpu" {
+  description = "CPU units for Nightwatch agent sidecar (64 = 0.0625 vCPU, 128 = 0.125 vCPU)"
+  type        = number
+  default     = 128
+}
+
+variable "nightwatch_agent_memory" {
+  description = "Memory (MB) for Nightwatch agent sidecar"
+  type        = number
+  default     = 256
+}
+
+# ========================================
 # OPTIONAL: Email (SES)
 # ========================================
 

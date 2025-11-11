@@ -205,6 +205,33 @@ vpn_additional_authorized_cidrs = []
 enable_meilisearch = true
 
 # ========================================
+# OPTIONAL: Laravel Nightwatch Configuration
+# ========================================
+# Laravel Nightwatch provides production-grade application monitoring
+# and performance insights for your Laravel application.
+# https://nightwatch.laravel.com
+
+# Enable Laravel Nightwatch monitoring (runs as a sidecar container)
+enable_nightwatch = false
+
+# Nightwatch API key from nightwatch.laravel.com
+# IMPORTANT: Keep this secret! Consider using environment variables or a secrets manager.
+nightwatch_api_key = ""
+
+# Sample rates control what percentage of events are sent to Nightwatch
+# Lower rates reduce costs and agent overhead in high-traffic applications
+nightwatch_request_sample_rate   = 0.1 # 10% of requests (0.0 to 1.0)
+nightwatch_command_sample_rate   = 1.0 # 100% of commands (0.0 to 1.0)
+nightwatch_exception_sample_rate = 1.0 # 100% of exceptions (0.0 to 1.0)
+
+# Advanced: Override default Nightwatch agent image
+# nightwatch_agent_image = "laravelphp/nightwatch-agent:v1"
+
+# Advanced: Adjust agent resource allocation (usually not needed)
+# nightwatch_agent_cpu    = 128 # CPU units
+# nightwatch_agent_memory = 256 # Memory in MB
+
+# ========================================
 # OPTIONAL: Email (SES) Configuration
 # ========================================
 

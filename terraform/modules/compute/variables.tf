@@ -203,3 +203,56 @@ variable "app_server_mode" {
   type        = string
   default     = "php-fpm"
 }
+
+# ========================================
+# Laravel Nightwatch Configuration
+# ========================================
+
+variable "enable_nightwatch" {
+  description = "Enable Laravel Nightwatch monitoring sidecar container"
+  type        = bool
+  default     = false
+}
+
+variable "nightwatch_api_key" {
+  description = "Laravel Nightwatch API key"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "nightwatch_request_sample_rate" {
+  description = "Request sample rate for Nightwatch (0.0 to 1.0)"
+  type        = number
+  default     = 0.1
+}
+
+variable "nightwatch_command_sample_rate" {
+  description = "Command sample rate for Nightwatch (0.0 to 1.0)"
+  type        = number
+  default     = 1.0
+}
+
+variable "nightwatch_exception_sample_rate" {
+  description = "Exception sample rate for Nightwatch (0.0 to 1.0)"
+  type        = number
+  default     = 1.0
+}
+
+variable "nightwatch_agent_image" {
+  description = "Docker image for Nightwatch agent"
+  type        = string
+  default     = "laravelphp/nightwatch-agent:v1"
+}
+
+variable "nightwatch_agent_cpu" {
+  description = "CPU units for Nightwatch agent sidecar"
+  type        = number
+  default     = 128
+}
+
+variable "nightwatch_agent_memory" {
+  description = "Memory (MB) for Nightwatch agent sidecar"
+  type        = number
+  default     = 256
+}
