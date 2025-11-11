@@ -5,34 +5,34 @@
 # AWS Config
 output "config_recorder_id" {
   description = "ID of the AWS Config recorder"
-  value       = var.enable_aws_config ? aws_config_configuration_recorder.main[0].id : null
+  value       = var.enable_aws_config && var.environment == "production" ? aws_config_configuration_recorder.main[0].id : null
 }
 
 output "config_role_arn" {
   description = "ARN of the AWS Config IAM role"
-  value       = var.enable_aws_config ? aws_iam_role.config[0].arn : null
+  value       = var.enable_aws_config && var.environment == "production" ? aws_iam_role.config[0].arn : null
 }
 
 # Security Hub
 output "security_hub_account_id" {
   description = "AWS Security Hub account ID"
-  value       = var.enable_security_hub ? aws_securityhub_account.main[0].id : null
+  value       = var.enable_security_hub && var.environment == "production" ? aws_securityhub_account.main[0].id : null
 }
 
 output "security_hub_findings_topic_arn" {
   description = "SNS topic ARN for Security Hub findings"
-  value       = var.enable_security_hub && length(var.security_hub_notification_emails) > 0 ? aws_sns_topic.security_hub_findings[0].arn : null
+  value       = var.enable_security_hub && length(var.security_hub_notification_emails) > 0 && var.environment == "production" ? aws_sns_topic.security_hub_findings[0].arn : null
 }
 
 # GuardDuty
 output "guardduty_detector_id" {
   description = "ID of the GuardDuty detector"
-  value       = var.enable_guardduty ? data.aws_guardduty_detector.existing[0].id : null
+  value       = var.enable_guardduty && var.environment == "production" ? data.aws_guardduty_detector.existing[0].id : null
 }
 
 output "guardduty_findings_topic_arn" {
   description = "SNS topic ARN for GuardDuty findings"
-  value       = var.enable_guardduty && length(var.guardduty_notification_emails) > 0 ? aws_sns_topic.guardduty_findings[0].arn : null
+  value       = var.enable_guardduty && length(var.guardduty_notification_emails) > 0 && var.environment == "production" ? aws_sns_topic.guardduty_findings[0].arn : null
 }
 
 # Macie

@@ -32,6 +32,10 @@ locals {
       value = var.app_server_mode
     },
     {
+      name  = "SESSION_DOMAIN"
+      value = ".${var.domain_name}"
+    },
+    {
       name  = "REDIS_HOST"
       value = var.redis_endpoint
     },

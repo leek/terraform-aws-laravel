@@ -194,6 +194,12 @@ resource "aws_lb_target_group" "main" {
 
   deregistration_delay = 15
 
+  stickiness {
+    type            = "lb_cookie"
+    cookie_duration = 86400 # 24 hours
+    enabled         = true
+  }
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-${var.environment}-tg"
   })

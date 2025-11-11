@@ -94,8 +94,11 @@ RUN apk add --no-cache \
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Copy Composer dependency files
-COPY composer.json composer.lock auth.json* ./
+# Copy dependency files
+COPY composer.json composer.lock auth.json* package.json package-lock.json ./
+
+# Copy the rest of the application files
+COPY . .
 
 # Copy optional vendor-src and patches directories if they exist
 RUN --mount=type=bind,source=.,target=/src \
@@ -104,22 +107,14 @@ RUN --mount=type=bind,source=.,target=/src \
 
 # Install PHP dependencies with cache mounts
 RUN --mount=type=cache,target=/root/.composer/cache \
-    composer install --no-scripts --optimize-autoloader --no-interaction --prefer-dist --no-ansi --no-progress
-
-# Copy NPM dependency files
-COPY package.json package-lock.json ./
+    composer install --no-scripts --optimize-autoloader --no-interaction --prefer-dist && \
+    composer clear-cache
 
 # Install NPM dependencies with cache mounts
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci && \
-    npm cache clean --force
-
-# Copy the rest of the application files
-COPY . .
-
-# Build assets
-RUN npm run build && \
-    rm -rf node_modules
+    npm ci --include=optional && \
+    npm cache clean --force && \
+    npm run build
 
 # Create minimal .env for build-time caching (will be replaced at runtime)
 # We need APP_KEY and basic config for artisan commands to work
