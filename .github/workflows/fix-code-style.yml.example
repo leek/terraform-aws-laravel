@@ -20,9 +20,9 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
-          ssh-key: ${{ secrets.DEPLOY_KEY }} # needed if branch is protected
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
           fetch-depth: 0
 
       - name: Setup PHP
@@ -39,7 +39,7 @@ jobs:
           CACHE_STORE: array
 
       - name: Setup NodeJS
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v6
 
       - name: Install NodeJS dependencies
         run: npm ci
@@ -51,7 +51,7 @@ jobs:
         run: npm run prettier
 
       - name: Commit linted files
-        uses: stefanzweifel/git-auto-commit-action@v6
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "chore: fix code style [skip ci]"
           branch: main

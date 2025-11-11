@@ -1,36 +1,27 @@
 name: Announce Release
 
 on:
-  pull_request:
-    types: [closed]
-    branches:
-      - main
+  push:
+    branches: [main]
+    paths:
+      - CHANGELOG.md
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   announce:
-    # Only run if PR was merged (not just closed) and modified CHANGELOG.md
-    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 2
 
-      - name: Check if this is a changelog PR
-        id: check
-        run: |
-          # Check if CHANGELOG.md was modified
-          if git diff --name-only HEAD^ HEAD | grep -q "CHANGELOG.md"; then
-            echo "is_changelog_pr=true" >> $GITHUB_OUTPUT
-          else
-            echo "is_changelog_pr=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Extract Latest Changelog
         id: changelog
-        if: steps.check.outputs.is_changelog_pr == 'true'
         run: |
           # Skip Unreleased section and get the first real version section
           # Extract from first non-Unreleased ## [ until the next ---
@@ -98,24 +89,31 @@ jobs:
           echo "full_changelog_url=$full_changelog_url" >> $GITHUB_OUTPUT
 
       - name: Announce Release to Teams via Power Automate
-        if: steps.check.outputs.is_changelog_pr == 'true'
+        if: steps.changelog.outputs.version != ''
         run: |
           # Build body array with dynamic sections using jq
           # Split each section into individual TextBlocks for proper line breaks
+          # Properly JSON-encode multiline strings to avoid shell/jq parsing issues
+          ADDED_JSON=$(echo '${{ steps.changelog.outputs.added }}' | jq -Rs .)
+          CHANGED_JSON=$(echo '${{ steps.changelog.outputs.changed }}' | jq -Rs .)
+          FIXED_JSON=$(echo '${{ steps.changelog.outputs.fixed }}' | jq -Rs .)
+          REMOVED_JSON=$(echo '${{ steps.changelog.outputs.removed }}' | jq -Rs .)
+          SECURITY_JSON=$(echo '${{ steps.changelog.outputs.security }}' | jq -Rs .)
+
           body=$(jq -n \
             --arg version "${{ steps.changelog.outputs.version }}" \
             --arg date "${{ steps.changelog.outputs.date }}" \
             --arg actor "${{ github.actor }}" \
-            --arg added "${{ steps.changelog.outputs.added }}" \
-            --arg changed "${{ steps.changelog.outputs.changed }}" \
-            --arg fixed "${{ steps.changelog.outputs.fixed }}" \
-            --arg removed "${{ steps.changelog.outputs.removed }}" \
-            --arg security "${{ steps.changelog.outputs.security }}" \
+            --argjson added "$ADDED_JSON" \
+            --argjson changed "$CHANGED_JSON" \
+            --argjson fixed "$FIXED_JSON" \
+            --argjson removed "$REMOVED_JSON" \
+            --argjson security "$SECURITY_JSON" \
             '
             [
               {
                 type: "TextBlock",
-                text: ("🚀 Laravel " + $version + " Released"),
+                text: ("🚀 Apollo " + $version + " Released"),
                 size: "Large",
                 weight: "Bolder",
                 color: "Accent"
@@ -150,8 +148,44 @@ jobs:
           ')
 
           # Build full Adaptive Card payload
-          #payload=$(jq -n \
-          #  --argjson body "$body" \
-          #  --arg releaseUrl "https://github.com/${{ github.repository }}/releases/tag/${{ steps.changelog.outputs.version }}" \
-          #  --arg changelogUrl "https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md" \
-          #  --arg fullChangelogUrl "${{ steps.changelog.outputs.full_changelog_url }}" \
+          payload=$(jq -n \
+            --argjson body "$body" \
+            --arg releaseUrl "https://github.com/${{ github.repository }}/releases/tag/${{ steps.changelog.outputs.version }}" \
+            --arg changelogUrl "https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md" \
+            --arg fullChangelogUrl "${{ steps.changelog.outputs.full_changelog_url }}" \
+            '{
+              attachments: [
+                {
+                  contentType: "application/vnd.microsoft.card.adaptive",
+                  content: {
+                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                    type: "AdaptiveCard",
+                    version: "1.4",
+                    body: $body,
+                    actions: [
+                      {
+                        type: "Action.OpenUrl",
+                        title: "View Release",
+                        url: $releaseUrl
+                      },
+                      {
+                        type: "Action.OpenUrl",
+                        title: "Full Changelog",
+                        url: $fullChangelogUrl
+                      },
+                      {
+                        type: "Action.OpenUrl",
+                        title: "Changelog File",
+                        url: $changelogUrl
+                      }
+                    ]
+                  }
+                }
+              ]
+            }')
+
+          # Send to Power Automate webhook
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            'https://default2658679ca0e84be685d470758eb11b.ec.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/5c54691b4d2b4cb5b024078ba6844acf/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=L42Uy_Tik-w2WK373FX5AawijJbMtK2OY2D8WQ2_qvM'
