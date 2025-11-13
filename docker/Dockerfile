@@ -5,33 +5,35 @@
 # ========================================
 FROM alpine:latest AS binaries
 
+ARG RR_VERSION=v2025.1.4
+ARG FP_VERSION=v1.9.1
+
 RUN apk add --no-cache curl
 
 # Download RoadRunner binary for Laravel Octane
 RUN set -o pipefail && \
-    ARCH=$(uname -m) && \
+    ARCH="$(uname -m)" && \
     case "$ARCH" in \
     x86_64) RR_ARCH="amd64" ;; \
-    aarch64) RR_ARCH="arm64" ;; \
-    arm64) RR_ARCH="arm64" ;; \
+    aarch64|arm64) RR_ARCH="arm64" ;; \
     *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
     esac && \
     mkdir -p /tmp/rr && \
-    curl -sSL https://github.com/roadrunner-server/roadrunner/releases/download/v2025.1.4/roadrunner-2025.1.4-linux-${RR_ARCH}.tar.gz \
+    curl -sSL https://github.com/roadrunner-server/roadrunner/releases/download/${RR_VERSION}/roadrunner-${RR_VERSION#v}-linux-${RR_ARCH}.tar.gz \
     | tar -xz -C /tmp/rr && \
     find /tmp/rr -type f \( -name 'rr' -o -name 'roadrunner' \) | head -1 | xargs -I {} mv {} /usr/local/bin/roadrunner && \
     chmod +x /usr/local/bin/roadrunner && \
     rm -rf /tmp/rr
 
 # Download FrankenPHP binary for Laravel Octane
-RUN ARCH=$(uname -m) && \
+RUN set -o pipefail && \
+    ARCH="$(uname -m)" && \
     case "$ARCH" in \
     x86_64) FP_ARCH="x86_64" ;; \
-    aarch64) FP_ARCH="aarch64" ;; \
-    arm64) FP_ARCH="aarch64" ;; \
+    aarch64|arm64) FP_ARCH="aarch64" ;; \
     *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
     esac && \
-    curl -sSL https://github.com/dunglas/frankenphp/releases/download/v1.9.1/frankenphp-linux-${FP_ARCH} \
+    curl -sSL https://github.com/dunglas/frankenphp/releases/download/${FP_VERSION}/frankenphp-linux-${FP_ARCH} \
     -o /usr/local/bin/frankenphp && \
     chmod +x /usr/local/bin/frankenphp
 
