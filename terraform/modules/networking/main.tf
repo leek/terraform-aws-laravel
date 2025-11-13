@@ -15,7 +15,7 @@ module "vpc" {
   public_subnets  = [for k in range(3) : cidrsubnet(var.vpc_cidr, 4, k + 4)]
 
   enable_nat_gateway   = true
-  single_nat_gateway   = true
+  single_nat_gateway   = var.environment == "production" ? false : true # Production: one NAT per AZ for HA
   enable_vpn_gateway   = false
   enable_dns_hostnames = true
   enable_dns_support   = true

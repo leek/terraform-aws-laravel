@@ -88,10 +88,6 @@ locals {
       value = local.nightwatch_token
     },
     {
-      name  = "NIGHTWATCH_INGEST_URI"
-      value = "http://localhost:2407"
-    },
-    {
       name  = "NIGHTWATCH_REQUEST_SAMPLE_RATE"
       value = tostring(var.nightwatch_request_sample_rate)
     },

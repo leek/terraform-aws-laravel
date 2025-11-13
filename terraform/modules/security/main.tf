@@ -115,6 +115,58 @@ resource "aws_kms_alias" "backup" {
   target_key_id = aws_kms_key.backup.key_id
 }
 
+# CloudWatch Logs KMS Key
+resource "aws_kms_key" "cloudwatch_logs" {
+  description             = "KMS key for ${var.app_name}-${var.environment} CloudWatch Logs encryption"
+  deletion_window_in_days = var.kms_deletion_window
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.caller_identity_account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${var.aws_region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${var.caller_identity_account_id}:log-group:*"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = merge(var.common_tags, {
+    Name = "${var.app_name}-${var.environment}-cloudwatch-logs-key"
+  })
+}
+
+resource "aws_kms_alias" "cloudwatch_logs" {
+  name          = "alias/${var.app_name}-${var.environment}-cloudwatch-logs"
+  target_key_id = aws_kms_key.cloudwatch_logs.key_id
+}
+
 # ========================================
 # ECS IAM Roles
 # ========================================
@@ -354,29 +406,60 @@ resource "aws_iam_role_policy" "github_actions_policy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
+      # ECR - Docker image push/pull
       {
         Effect = "Allow"
         Action = [
-          "ecr:*"
+          "ecr:GetAuthorizationToken"
         ]
-        Resource = "*"
+        Resource = "*" # Required for ECR login
       },
       {
         Effect = "Allow"
         Action = [
-          "ecs:*"
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:PutImage",
+          "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:CompleteLayerUpload"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:ecr:${var.aws_region}:${var.caller_identity_account_id}:repository/${var.app_name}-${var.environment}",
+          "arn:aws:ecr:${var.aws_region}:${var.caller_identity_account_id}:repository/${var.app_name}-${var.environment}-*"
+        ]
       },
+      # ECS - Service deployment and task execution
       {
         Effect = "Allow"
         Action = [
-          "ssm:PutParameter",
-          "ssm:GetParameter",
-          "ssm:GetParameters"
+          "ecs:DescribeServices",
+          "ecs:DescribeTasks",
+          "ecs:DescribeTaskDefinition",
+          "ecs:ListTasks",
+          "ecs:UpdateService",
+          "ecs:RunTask"
         ]
-        Resource = "arn:aws:ssm:${var.aws_region}:${var.caller_identity_account_id}:parameter/${var.app_name}/${var.environment}/*"
+        Resource = [
+          "arn:aws:ecs:${var.aws_region}:${var.caller_identity_account_id}:service/${var.app_name}-${var.environment}/*",
+          "arn:aws:ecs:${var.aws_region}:${var.caller_identity_account_id}:task/${var.app_name}-${var.environment}/*",
+          "arn:aws:ecs:${var.aws_region}:${var.caller_identity_account_id}:task-definition/${var.app_name}-${var.environment}-*:*",
+          "arn:aws:ecs:${var.aws_region}:${var.caller_identity_account_id}:cluster/${var.app_name}-${var.environment}"
+        ]
       },
+      # CloudWatch Logs - Read deployment logs for debugging
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:GetLogEvents",
+          "logs:DescribeLogStreams"
+        ]
+        Resource = [
+          "arn:aws:logs:${var.aws_region}:${var.caller_identity_account_id}:log-group:/aws/ecs/${var.app_name}-${var.environment}:*"
+        ]
+      },
+      # IAM PassRole - Allow ECS to assume execution and task roles
       {
         Effect = "Allow"
         Action = [
@@ -386,74 +469,11 @@ resource "aws_iam_role_policy" "github_actions_policy" {
           aws_iam_role.ecs_execution_role.arn,
           aws_iam_role.ecs_task_role.arn
         ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject"
-        ]
-        Resource = "arn:aws:s3:::${var.app_name}-terraform-state-bucket/*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:ListBucket"
-        ]
-        Resource = "arn:aws:s3:::${var.app_name}-terraform-state-bucket"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "dynamodb:GetItem",
-          "dynamodb:PutItem",
-          "dynamodb:DeleteItem"
-        ]
-        Resource = "arn:aws:dynamodb:${var.aws_region}:${var.caller_identity_account_id}:table/${var.app_name}-terraform-locks"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ec2:*",
-          "vpc:*",
-          "route53:*",
-          "acm:*",
-          "wafv2:*",
-          "logs:*",
-          "kms:*",
-          "sns:*",
-          "cloudtrail:*",
-          "rds:*",
-          "elasticache:*",
-          "iam:*",
-          "application-autoscaling:*",
-          "autoscaling:*",
-          "elasticloadbalancing:*",
-          "cloudwatch:*",
-          "ses:*",
-          "sqs:*",
-          "servicediscovery:*",
-          "secretsmanager:*"
-        ]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:*"
-        ]
-        Resource = [
-          "arn:aws:s3:::${var.app_name}-*",
-          "arn:aws:s3:::${var.app_name}-*/*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ssm:*"
-        ]
-        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "iam:PassedToService" = "ecs-tasks.amazonaws.com"
+          }
+        }
       }
     ]
   })

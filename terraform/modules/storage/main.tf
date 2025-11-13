@@ -300,11 +300,17 @@ resource "aws_s3_bucket" "config" {
 # Versioning
 resource "aws_s3_bucket_versioning" "config" {
   bucket = aws_s3_bucket.config.id
-  versioning_configuration { status = "Enabled" }
+
+  versioning_configuration {
+    status = "Enabled"
+  }
 }
 resource "aws_s3_bucket_versioning" "vpc_flow_logs" {
   bucket = aws_s3_bucket.vpc_flow_logs.id
-  versioning_configuration { status = "Enabled" }
+
+  versioning_configuration {
+    status = "Enabled"
+  }
 }
 
 resource "aws_s3_bucket_policy" "config" {
@@ -590,6 +596,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "macie_findings" {
 
 resource "aws_s3_bucket_versioning" "macie_findings" {
   bucket = aws_s3_bucket.macie_findings.id
+
   versioning_configuration {
     status = "Enabled"
   }

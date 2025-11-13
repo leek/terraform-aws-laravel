@@ -49,6 +49,16 @@ output "backup_kms_key_arn" {
   value       = aws_kms_key.backup.arn
 }
 
+output "cloudwatch_logs_kms_key_id" {
+  description = "KMS key ID for CloudWatch Logs encryption"
+  value       = aws_kms_key.cloudwatch_logs.key_id
+}
+
+output "cloudwatch_logs_kms_key_arn" {
+  description = "KMS key ARN for CloudWatch Logs encryption"
+  value       = aws_kms_key.cloudwatch_logs.arn
+}
+
 # IAM Outputs
 output "ecs_execution_role_arn" {
   description = "ARN of the ECS execution role"

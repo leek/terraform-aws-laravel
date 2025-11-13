@@ -64,7 +64,7 @@ module "rds" {
   create_db_option_group    = true
 
   # Backup
-  backup_retention_period = 7
+  backup_retention_period = var.environment == "production" ? 30 : 7
   backup_window           = "03:00-04:00"
   maintenance_window      = "Sun:04:00-Sun:05:00"
 
@@ -83,7 +83,9 @@ module "rds" {
 
   # Other settings
   deletion_protection = var.enable_deletion_protection
-  skip_final_snapshot = true
+
+  skip_final_snapshot              = var.environment == "production" ? false : true
+  final_snapshot_identifier_prefix = "${var.app_name}-${var.environment}-final-snapshot"
 
   tags = var.common_tags
 }
@@ -138,8 +140,10 @@ module "rds_read_replica" {
 
   # Other settings - match primary deletion protection
   deletion_protection = var.enable_deletion_protection
-  skip_final_snapshot = true
   apply_immediately   = true
+
+  skip_final_snapshot              = var.environment == "production" ? false : true
+  final_snapshot_identifier_prefix = "${var.app_name}-${var.environment}-read-final-snapshot"
 
   # Read replicas don't create subnet groups
   create_db_subnet_group = false

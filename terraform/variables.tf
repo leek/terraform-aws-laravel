@@ -486,6 +486,12 @@ variable "enable_alb_access_logs" {
   default     = false
 }
 
+variable "blocked_uri_patterns" {
+  description = "List of URI patterns to block at the WAF level (e.g., ['/login/login.html', '/admin.php', '/.env'])"
+  type        = list(string)
+  default     = []
+}
+
 # ========================================
 # OPTIONAL: Error Tracking (Sentry)
 # ========================================

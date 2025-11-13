@@ -6,6 +6,7 @@ resource "aws_cloudwatch_log_group" "vpn_connection_logs" {
   count             = var.connection_log_enabled ? 1 : 0
   name              = var.cloudwatch_log_group
   retention_in_days = 30
+  kms_key_id        = var.cloudwatch_logs_kms_key_id
 
   tags = merge(var.common_tags, {
     Name = "${var.name}-connection-logs"
