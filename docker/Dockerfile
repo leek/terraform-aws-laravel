@@ -1,7 +1,44 @@
 # syntax=docker/dockerfile:1.4
 
 # ========================================
-# Stage 1: Base image with PHP extensions
+# Stage: Download Octane binaries
+# ========================================
+FROM alpine:latest AS binaries
+
+ARG RR_VERSION=v2025.1.4
+ARG FP_VERSION=v1.9.1
+
+RUN apk add --no-cache curl
+
+# Download RoadRunner binary for Laravel Octane
+RUN set -o pipefail && \
+    ARCH="$(uname -m)" && \
+    case "$ARCH" in \
+    x86_64) RR_ARCH="amd64" ;; \
+    aarch64|arm64) RR_ARCH="arm64" ;; \
+    *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+    esac && \
+    mkdir -p /tmp/rr && \
+    curl -sSL https://github.com/roadrunner-server/roadrunner/releases/download/${RR_VERSION}/roadrunner-${RR_VERSION#v}-linux-${RR_ARCH}.tar.gz \
+    | tar -xz -C /tmp/rr && \
+    find /tmp/rr -type f \( -name 'rr' -o -name 'roadrunner' \) | head -1 | xargs -I {} mv {} /usr/local/bin/roadrunner && \
+    chmod +x /usr/local/bin/roadrunner && \
+    rm -rf /tmp/rr
+
+# Download FrankenPHP binary for Laravel Octane
+RUN set -o pipefail && \
+    ARCH="$(uname -m)" && \
+    case "$ARCH" in \
+    x86_64) FP_ARCH="x86_64" ;; \
+    aarch64|arm64) FP_ARCH="aarch64" ;; \
+    *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+    esac && \
+    curl -sSL https://github.com/dunglas/frankenphp/releases/download/${FP_VERSION}/frankenphp-linux-${FP_ARCH} \
+    -o /usr/local/bin/frankenphp && \
+    chmod +x /usr/local/bin/frankenphp
+
+# ========================================
+# Stage: Base image with PHP extensions
 # ========================================
 FROM php:8.4-fpm-alpine AS base
 
@@ -71,7 +108,7 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
 #     && rm -rf /tmp/php-uv
 
 # ========================================
-# Stage 2: Build application dependencies
+# Stage: Build application dependencies
 # ========================================
 FROM base AS builder
 
@@ -97,24 +134,25 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Copy dependency files
 COPY composer.json composer.lock auth.json* package.json package-lock.json ./
 
-# Copy the rest of the application files
-COPY . .
-
 # Copy optional vendor-src and patches directories if they exist
 RUN --mount=type=bind,source=.,target=/src \
     if [ -d /src/vendor-src ]; then cp -a /src/vendor-src ./vendor-src; fi && \
     if [ -d /src/patches ]; then cp -a /src/patches ./patches; fi
 
 # Install PHP dependencies with cache mounts
+# Note: We do not run `composer clear-cache` here because the cache is mounted and automatically managed by BuildKit.
 RUN --mount=type=cache,target=/root/.composer/cache \
-    composer install --no-scripts --optimize-autoloader --no-interaction --prefer-dist && \
-    composer clear-cache
+    composer install --no-scripts --optimize-autoloader --no-interaction --prefer-dist --no-dev
 
 # Install NPM dependencies with cache mounts
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci --include=optional && \
-    npm cache clean --force && \
-    npm run build
+    npm ci --include=optional
+
+# Copy the rest of the application files
+COPY . .
+
+# Build frontend assets
+RUN npm run build
 
 # Create minimal .env for build-time caching (will be replaced at runtime)
 # We need APP_KEY and basic config for artisan commands to work
@@ -126,42 +164,14 @@ RUN cp .env.example .env && \
 # This significantly speeds up container startup time
 # Override CACHE_STORE to avoid database connections during build
 # Set memory_limit for resource-intensive caching operations
-RUN CACHE_STORE=array php -d memory_limit=512M artisan event:cache --no-interaction --no-ansi && \
-    CACHE_STORE=array php -d memory_limit=512M artisan route:cache --no-interaction --no-ansi && \
-    CACHE_STORE=array php -d memory_limit=512M artisan view:cache --no-interaction --no-ansi && \
-    CACHE_STORE=array php -d memory_limit=512M artisan icons:cache --no-interaction --no-ansi && \
-    CACHE_STORE=array php -d memory_limit=512M artisan filament:cache-components --no-interaction --no-ansi
-
-# Download RoadRunner binary for Laravel Octane
-RUN set -o pipefail && \
-    ARCH=$(uname -m) && \
-    case "$ARCH" in \
-    x86_64) RR_ARCH="amd64" ;; \
-    aarch64) RR_ARCH="arm64" ;; \
-    arm64) RR_ARCH="arm64" ;; \
-    *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
-    esac && \
-    mkdir -p /tmp/rr && \
-    curl -sSL https://github.com/roadrunner-server/roadrunner/releases/download/v2025.1.4/roadrunner-2025.1.4-linux-${RR_ARCH}.tar.gz \
-    | tar -xz -C /tmp/rr && \
-    find /tmp/rr -type f \( -name 'rr' -o -name 'roadrunner' \) | head -1 | xargs -I {} mv {} /usr/local/bin/roadrunner && \
-    chmod +x /usr/local/bin/roadrunner && \
-    rm -rf /tmp/rr
-
-# Download FrankenPHP binary for Laravel Octane
-RUN ARCH=$(uname -m) && \
-    case "$ARCH" in \
-    x86_64) FP_ARCH="x86_64" ;; \
-    aarch64) FP_ARCH="aarch64" ;; \
-    arm64) FP_ARCH="aarch64" ;; \
-    *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
-    esac && \
-    curl -sSL https://github.com/dunglas/frankenphp/releases/download/v1.9.1/frankenphp-linux-${FP_ARCH} \
-    -o /usr/local/bin/frankenphp && \
-    chmod +x /usr/local/bin/frankenphp
+RUN CACHE_STORE=array php -d memory_limit=-1 artisan event:cache --no-interaction --no-ansi && \
+    CACHE_STORE=array php -d memory_limit=-1 artisan route:cache --no-interaction --no-ansi && \
+    CACHE_STORE=array php -d memory_limit=-1 artisan view:cache --no-interaction --no-ansi && \
+    CACHE_STORE=array php -d memory_limit=-1 artisan icons:cache --no-interaction --no-ansi && \
+    CACHE_STORE=array php -d memory_limit=-1 artisan filament:cache-components --no-interaction --no-ansi
 
 # ========================================
-# Stage 3: Final application image
+# Stage: Final application image
 # ========================================
 FROM base AS app
 
@@ -171,9 +181,9 @@ WORKDIR /var/www/html
 # Copy built application from the builder stage
 COPY --from=builder --chown=www-data:www-data /var/www/html .
 
-# Copy Octane binaries from builder stage
-COPY --from=builder /usr/local/bin/roadrunner /usr/local/bin/roadrunner
-COPY --from=builder /usr/local/bin/frankenphp /usr/local/bin/frankenphp
+# Copy Octane binaries from binaries stage
+COPY --from=binaries /usr/local/bin/roadrunner /usr/local/bin/roadrunner
+COPY --from=binaries /usr/local/bin/frankenphp /usr/local/bin/frankenphp
 
 # Copy configuration files
 COPY docker/.profile /root/.profile

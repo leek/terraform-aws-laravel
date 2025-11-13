@@ -94,6 +94,22 @@ jobs:
         with:
           version: latest
 
+      - name: Build and push base image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ env.DOCKERFILE_PATH }}
+          target: base
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}-base:latest
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}-base:${{ github.sha }}
+          platforms: linux/amd64
+          cache-from: |
+            type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}-base:latest
+            type=gha,scope=base
+          cache-to: type=gha,mode=max,scope=base
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
@@ -104,8 +120,13 @@ jobs:
             ${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}:${{ github.sha }}
             ${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}:latest
           platforms: linux/amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: |
+            type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}-base:latest
+            type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}:cache
+            type=gha,scope=app
+          cache-to: |
+            type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}:cache,mode=max
+            type=gha,mode=max,scope=app
 
       - name: Deploy to AWS ECS
         env:
@@ -332,7 +353,7 @@ jobs:
               "name": "${CONTAINER_NAME}",
               "command": [
                 "sh","-lc",
-                "php artisan down && php artisan migrate --force && php artisan up"
+                "php artisan down && php artisan migrate --force --isolated && php artisan up"
               ]
             }]
           }
@@ -356,7 +377,42 @@ jobs:
           echo "🆔 Started task: $RUN_ARN"
 
           echo "⏳ Waiting for task to stop..."
-          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$RUN_ARN"
+          # Retry aws ecs wait up to 5 times to handle transient connection issues
+          MAX_RETRIES=5
+          RETRY=0
+          WAIT_SUCCESS=false
+
+          while [ "$RETRY" -lt "$MAX_RETRIES" ]; do
+            RETRY=$((RETRY + 1))
+            echo "⏳ Wait attempt $RETRY/$MAX_RETRIES..."
+
+            if aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$RUN_ARN"; then
+              WAIT_SUCCESS=true
+              break
+            else
+              echo "⚠️  Wait command failed (attempt $RETRY/$MAX_RETRIES)"
+              if [ "$RETRY" -lt "$MAX_RETRIES" ]; then
+                echo "⏳ Retrying in 10 seconds..."
+                sleep 10
+              fi
+            fi
+          done
+
+          if [ "$WAIT_SUCCESS" = false ]; then
+            echo "⚠️  Wait command failed after $MAX_RETRIES attempts, checking task status anyway..."
+          fi
+
+          # Verify task is actually stopped
+          TASK_STATUS=$(aws ecs describe-tasks \
+            --cluster "$CLUSTER" \
+            --tasks "$RUN_ARN" \
+            --query 'tasks[0].lastStatus' \
+            --output text)
+
+          if [ "$TASK_STATUS" != "STOPPED" ]; then
+            echo "❌ Task is not stopped (status: $TASK_STATUS), cannot verify completion"
+            exit 1
+          fi
 
           EXIT_CODE=$(aws ecs describe-tasks \
             --cluster "$CLUSTER" \

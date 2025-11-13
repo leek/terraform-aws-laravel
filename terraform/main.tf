@@ -18,6 +18,27 @@ locals {
   # Extract the root domain from the full domain name
   domain_parts = split(".", var.domain_name)
   root_domain  = length(local.domain_parts) > 2 ? join(".", slice(local.domain_parts, length(local.domain_parts) - 2, length(local.domain_parts))) : var.domain_name
+
+  # Workspace validation mapping
+  workspace_environment_map = {
+    staging    = "staging"
+    uat        = "uat"
+    production = "production"
+  }
+}
+
+# ========================================
+# Workspace Validation
+# ========================================
+
+# Validate workspace matches environment to prevent accidental deployments
+resource "null_resource" "validate_workspace" {
+  lifecycle {
+    precondition {
+      condition     = terraform.workspace == var.environment
+      error_message = "Terraform workspace '${terraform.workspace}' does not match environment '${var.environment}'. Please switch to the correct workspace using: terraform workspace select ${var.environment}"
+    }
+  }
 }
 
 # Data sources
@@ -125,8 +146,7 @@ module "database" {
   enable_deletion_protection  = var.enable_deletion_protection
   create_read_replica         = var.db_create_read_replica
   read_replica_instance_class = var.db_read_replica_instance_class
-
-  common_tags = local.common_tags
+  common_tags                 = local.common_tags
 }
 
 # Cache (Redis)
@@ -166,6 +186,7 @@ module "monitoring" {
   caller_identity_account_id = data.aws_caller_identity.current.account_id
   healthcheck_alarm_emails   = var.healthcheck_alarm_emails
   enable_cloudtrail          = var.enable_cloudtrail
+  cloudwatch_logs_kms_key_id = module.security.cloudwatch_logs_kms_key_arn
   common_tags                = local.common_tags
 }
 
@@ -198,6 +219,7 @@ module "load_balancer" {
   certificate_arn       = module.certificates.certificate_arn
   alb_logs_bucket_name  = module.storage.alb_logs_bucket_name
   enable_access_logs    = var.enable_alb_access_logs
+  blocked_uri_patterns  = var.blocked_uri_patterns
   common_tags           = local.common_tags
 }
 
@@ -374,6 +396,7 @@ module "client_vpn" {
   connection_log_enabled         = var.vpn_connection_log_enabled
   cloudwatch_log_group           = var.vpn_connection_log_enabled ? var.vpn_cloudwatch_log_group : null
   cloudwatch_log_stream          = var.vpn_connection_log_enabled ? var.vpn_cloudwatch_log_stream : null
+  cloudwatch_logs_kms_key_id     = module.security.cloudwatch_logs_kms_key_arn
   login_banner_enabled           = var.vpn_login_banner_enabled
   login_banner_text              = var.vpn_login_banner_text
   vpc_id                         = module.networking.vpc_id

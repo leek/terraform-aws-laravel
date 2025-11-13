@@ -44,3 +44,8 @@ variable "enable_cloudtrail" {
   type        = bool
   default     = true
 }
+
+variable "cloudwatch_logs_kms_key_id" {
+  description = "KMS key ID for CloudWatch Logs encryption"
+  type        = string
+}

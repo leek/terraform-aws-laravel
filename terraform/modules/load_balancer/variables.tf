@@ -65,3 +65,9 @@ variable "drop_invalid_header_fields" {
   type        = bool
   default     = true
 }
+
+variable "blocked_uri_patterns" {
+  description = "List of URI patterns to block at the WAF level (e.g., ['/login/login.html', '/admin.php', '/.env'])"
+  type        = list(string)
+  default     = []
+}

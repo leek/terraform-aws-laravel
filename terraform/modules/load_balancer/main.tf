@@ -10,6 +10,46 @@ resource "aws_wafv2_web_acl" "main" {
     allow {}
   }
 
+  # Custom Rule - Block Specific URI Patterns
+  dynamic "rule" {
+    for_each = length(var.blocked_uri_patterns) > 0 ? [1] : []
+    content {
+      name     = "BlockSpecificURIPatterns"
+      priority = 0
+
+      action {
+        block {}
+      }
+
+      statement {
+        or_statement {
+          dynamic "statement" {
+            for_each = var.blocked_uri_patterns
+            content {
+              byte_match_statement {
+                field_to_match {
+                  uri_path {}
+                }
+                positional_constraint = "EXACTLY"
+                search_string         = statement.value
+                text_transformation {
+                  priority = 0
+                  type     = "LOWERCASE"
+                }
+              }
+            }
+          }
+        }
+      }
+
+      visibility_config {
+        cloudwatch_metrics_enabled = true
+        metric_name                = "BlockedURIPatterns"
+        sampled_requests_enabled   = true
+      }
+    }
+  }
+
   # AWS Managed Rules - Core Rule Set
   rule {
     name     = "AWSManagedRulesCommonRuleSet"

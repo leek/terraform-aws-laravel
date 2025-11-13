@@ -319,6 +319,10 @@ resource "aws_securityhub_standards_subscription" "cis" {
 
   standards_arn = "arn:aws:securityhub:${var.aws_region}::standards/cis-aws-foundations-benchmark/v/1.4.0"
 
+  timeouts {
+    create = "10m"
+  }
+
   depends_on = [aws_securityhub_account.main]
 }
 
@@ -327,6 +331,10 @@ resource "aws_securityhub_standards_subscription" "foundational" {
   count = var.enable_security_hub && var.enable_aws_foundational_standard && var.environment == "production" ? 1 : 0
 
   standards_arn = "arn:aws:securityhub:${var.aws_region}::standards/aws-foundational-security-best-practices/v/1.0.0"
+
+  timeouts {
+    create = "10m"
+  }
 
   depends_on = [aws_securityhub_account.main]
 }

@@ -77,6 +77,12 @@ variable "cloudwatch_log_stream" {
   default     = null
 }
 
+variable "cloudwatch_logs_kms_key_id" {
+  description = "KMS key ID for CloudWatch Logs encryption"
+  type        = optional(string)
+  default     = null
+}
+
 variable "client_connect_enabled" {
   description = "Whether to enable client connect options"
   type        = bool
