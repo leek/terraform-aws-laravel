@@ -57,6 +57,8 @@ This isn't just another Laravel deployment template - it's a **production-grade,
 - **Security groups** - Network-level firewalling
 - **SSL/TLS** - HTTPS everywhere with ACM certificates (includes VPN server certificates)
 
+
+
 ## Architecture
 
 The infrastructure deploys three separate ECS services:
@@ -267,7 +269,8 @@ app_server_mode = "octane-frankenphp"
 - Reduced memory usage per request
 - Better for high-traffic applications
 
-**Important:** Ensure your Laravel application is installed with the Octane package and is compatible with Octane (no global state, stateless services). See [Laravel Octane documentation](https://laravel.com/docs/octane) for details.
+> [!IMPORTANT]
+> Ensure your Laravel application is installed with the Octane package and is compatible with Octane (no global state, stateless services). See [Laravel Octane documentation](https://laravel.com/docs/octane) for details.
 
 ### Minimal Configuration
 
@@ -318,7 +321,8 @@ enable_access_analyzer     = false
 enable_backup_audit_manager = false
 ```
 
-**Estimated cost**: ~$50-100/month (infrastructure) + ~$30-50/month (compliance)
+> [!NOTE]
+> **Estimated cost**: ~$50-100/month (infrastructure) + ~$30-50/month (compliance)
 
 ### Production Configuration
 
@@ -383,7 +387,8 @@ security_hub_notification_emails = ["security@example.com"]
 guardduty_notification_emails    = ["security@example.com"]
 ```
 
-**Estimated cost**: ~$300-500/month (infrastructure) + ~$100-200/month (compliance)
+> [!NOTE]
+> **Estimated cost**: ~$300-500/month (infrastructure) + ~$100-200/month (compliance)
 
 ## Switching Between PHP-FPM and Octane
 
@@ -501,7 +506,8 @@ docker run \
   myapp
 ```
 
-**Note:** All Octane binaries are pre-installed in the image, so switching between modes is instant - no rebuild required!
+> [!TIP]
+> All Octane binaries are pre-installed in the image, so switching between modes is instant - no rebuild required!
 
 ## Optional Features
 
@@ -573,7 +579,8 @@ vpn_saml_provider_arn = "arn:aws:iam::ACCOUNT:saml-provider/YourProvider"
 
 Provides secure remote access to your VPC for development and debugging.
 
-> **Note**: VPN server certificates are automatically provisioned for all environments via ACM (even if Client VPN is disabled). This allows you to enable VPN later without additional certificate setup.
+> [!NOTE]
+> VPN server certificates are automatically provisioned for all environments via ACM (even if Client VPN is disabled). This allows you to enable VPN later without additional certificate setup.
 
 ### Enable Bastion Host
 
