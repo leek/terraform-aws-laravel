@@ -382,7 +382,7 @@ jobs:
           RETRY=0
           WAIT_SUCCESS=false
 
-          while [ $RETRY -lt $MAX_RETRIES ]; do
+          while [ "$RETRY" -lt "$MAX_RETRIES" ]; do
             RETRY=$((RETRY + 1))
             echo "⏳ Wait attempt $RETRY/$MAX_RETRIES..."
 
@@ -391,7 +391,7 @@ jobs:
               break
             else
               echo "⚠️  Wait command failed (attempt $RETRY/$MAX_RETRIES)"
-              if [ $RETRY -lt $MAX_RETRIES ]; then
+              if [ "$RETRY" -lt "$MAX_RETRIES" ]; then
                 echo "⏳ Retrying in 10 seconds..."
                 sleep 10
               fi

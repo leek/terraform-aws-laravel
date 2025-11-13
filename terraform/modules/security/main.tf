@@ -430,13 +430,21 @@ resource "aws_iam_role_policy" "github_actions_policy" {
           "arn:aws:ecr:${var.aws_region}:${var.caller_identity_account_id}:repository/${var.app_name}-${var.environment}-*"
         ]
       },
-      # ECS - Service deployment and task execution
+      # ECS - Actions that require wildcard resource
+      {
+        Effect = "Allow"
+        Action = [
+          "ecs:DescribeTaskDefinition",
+          "ecs:RegisterTaskDefinition"
+        ]
+        Resource = "*" # These actions don't support resource-level permissions
+      },
+      # ECS - Service deployment and task execution with specific resources
       {
         Effect = "Allow"
         Action = [
           "ecs:DescribeServices",
           "ecs:DescribeTasks",
-          "ecs:DescribeTaskDefinition",
           "ecs:ListTasks",
           "ecs:UpdateService",
           "ecs:RunTask"
@@ -444,6 +452,7 @@ resource "aws_iam_role_policy" "github_actions_policy" {
         Resource = [
           "arn:aws:ecs:${var.aws_region}:${var.caller_identity_account_id}:service/${var.app_name}-${var.environment}/*",
           "arn:aws:ecs:${var.aws_region}:${var.caller_identity_account_id}:task/${var.app_name}-${var.environment}/*",
+          "arn:aws:ecs:${var.aws_region}:${var.caller_identity_account_id}:task-definition/${var.app_name}-${var.environment}:*",
           "arn:aws:ecs:${var.aws_region}:${var.caller_identity_account_id}:task-definition/${var.app_name}-${var.environment}-*:*",
           "arn:aws:ecs:${var.aws_region}:${var.caller_identity_account_id}:cluster/${var.app_name}-${var.environment}"
         ]
