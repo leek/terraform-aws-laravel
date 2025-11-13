@@ -409,6 +409,34 @@ variable "nightwatch_agent_memory" {
 }
 
 # ========================================
+# OPTIONAL: Scheduled Scaling (Cost Optimization)
+# ========================================
+
+variable "enable_scheduled_scaling" {
+  description = "Enable scheduled scaling to reduce costs during off-hours (nights and weekends). Recommended for staging environments."
+  type        = bool
+  default     = false
+}
+
+variable "scale_down_schedule" {
+  description = "Cron expression for scaling down during weekday evenings (UTC time). Default: 6 PM EST Mon-Fri (11 PM UTC)"
+  type        = string
+  default     = "cron(0 23 ? * MON-FRI *)"
+}
+
+variable "scale_up_schedule" {
+  description = "Cron expression for scaling up during weekday mornings (UTC time). Default: 8 AM EST Mon-Fri (12 PM UTC)"
+  type        = string
+  default     = "cron(0 12 ? * MON-FRI *)"
+}
+
+variable "weekend_scale_down_schedule" {
+  description = "Cron expression for weekend scale down (UTC time). Default: Saturday 12 AM EST (5 AM UTC)"
+  type        = string
+  default     = "cron(0 5 ? * SAT *)"
+}
+
+# ========================================
 # OPTIONAL: Email (SES)
 # ========================================
 

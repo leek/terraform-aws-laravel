@@ -232,6 +232,25 @@ nightwatch_exception_sample_rate = 1.0 # 100% of exceptions (0.0 to 1.0)
 # nightwatch_agent_memory = 256 # Memory in MB
 
 # ========================================
+# OPTIONAL: Scheduled Scaling (Cost Optimization)
+# ========================================
+# Automatically scale down ECS tasks and stop RDS during off-hours to save costs.
+# Recommended for staging/development environments with predictable work-hours traffic.
+# All times are in UTC (EST = UTC-5, EDT = UTC-4)
+
+# Enable scheduled scaling for ECS (scales down nights & weekends)
+enable_scheduled_scaling = false
+
+# Weekday evening scale down (default: 6 PM EST = 11 PM UTC)
+scale_down_schedule = "cron(0 23 ? * MON-FRI *)"
+
+# Weekday morning scale up (default: 8 AM EST = 12 PM UTC)
+scale_up_schedule = "cron(0 12 ? * MON-FRI *)"
+
+# Weekend scale down (default: Saturday 12 AM EST = 5 AM UTC)
+weekend_scale_down_schedule = "cron(0 5 ? * SAT *)"
+
+# ========================================
 # OPTIONAL: Email (SES) Configuration
 # ========================================
 

@@ -388,6 +388,61 @@ resource "aws_appautoscaling_policy" "ecs_policy_memory" {
 }
 
 # ========================================
+# Scheduled Scaling for Off-Hours Cost Savings
+# ========================================
+
+# Scale down to minimum capacity after business hours (weekday evenings)
+# Default: 6 PM EST Mon-Fri (11 PM UTC)
+resource "aws_appautoscaling_scheduled_action" "scale_down_evening" {
+  count = var.enable_scheduled_scaling ? 1 : 0
+
+  name               = "${var.app_name}-${var.environment}-scale-down-evening"
+  service_namespace  = aws_appautoscaling_target.ecs_target.service_namespace
+  resource_id        = aws_appautoscaling_target.ecs_target.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs_target.scalable_dimension
+  schedule           = var.scale_down_schedule
+
+  scalable_target_action {
+    min_capacity = var.min_capacity
+    max_capacity = var.min_capacity + 1 # Limit scale-out during off-hours
+  }
+}
+
+# Scale up before business hours (weekday mornings)
+# Default: 8 AM EST Mon-Fri (12 PM UTC)
+resource "aws_appautoscaling_scheduled_action" "scale_up_morning" {
+  count = var.enable_scheduled_scaling ? 1 : 0
+
+  name               = "${var.app_name}-${var.environment}-scale-up-morning"
+  service_namespace  = aws_appautoscaling_target.ecs_target.service_namespace
+  resource_id        = aws_appautoscaling_target.ecs_target.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs_target.scalable_dimension
+  schedule           = var.scale_up_schedule
+
+  scalable_target_action {
+    min_capacity = var.min_capacity
+    max_capacity = var.max_capacity # Full scale-out capacity during business hours
+  }
+}
+
+# Scale down for weekends
+# Default: Saturday 12 AM EST (5 AM UTC)
+resource "aws_appautoscaling_scheduled_action" "scale_down_weekend" {
+  count = var.enable_scheduled_scaling ? 1 : 0
+
+  name               = "${var.app_name}-${var.environment}-scale-down-weekend"
+  service_namespace  = aws_appautoscaling_target.ecs_target.service_namespace
+  resource_id        = aws_appautoscaling_target.ecs_target.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs_target.scalable_dimension
+  schedule           = var.weekend_scale_down_schedule
+
+  scalable_target_action {
+    min_capacity = var.min_capacity
+    max_capacity = var.min_capacity + 1 # Limit scale-out during weekends
+  }
+}
+
+# ========================================
 # Worker Services (Queue Worker & Scheduler)
 # ========================================
 

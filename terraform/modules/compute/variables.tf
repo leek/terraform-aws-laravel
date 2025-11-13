@@ -108,6 +108,34 @@ variable "max_capacity" {
 }
 
 # ========================================
+# Scheduled Scaling Configuration
+# ========================================
+
+variable "enable_scheduled_scaling" {
+  description = "Enable scheduled scaling to reduce costs during off-hours (nights and weekends)"
+  type        = bool
+  default     = false
+}
+
+variable "scale_down_schedule" {
+  description = "Cron expression for scaling down (UTC time). Default: 6 PM EST weekdays + all day weekends"
+  type        = string
+  default     = "cron(0 23 ? * MON-FRI *)" # 6 PM EST Mon-Fri (11 PM UTC)
+}
+
+variable "scale_up_schedule" {
+  description = "Cron expression for scaling up (UTC time). Default: 8 AM EST weekdays only"
+  type        = string
+  default     = "cron(0 12 ? * MON-FRI *)" # 8 AM EST Mon-Fri (12 PM UTC)
+}
+
+variable "weekend_scale_down_schedule" {
+  description = "Cron expression for weekend scale down (UTC time). Default: Saturday 12 AM EST"
+  type        = string
+  default     = "cron(0 5 ? * SAT *)" # Saturday 12 AM EST (5 AM UTC)
+}
+
+# ========================================
 # Queue Worker Configuration
 # ========================================
 

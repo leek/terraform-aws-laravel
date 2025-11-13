@@ -125,7 +125,8 @@ module "database" {
   enable_deletion_protection  = var.enable_deletion_protection
   create_read_replica         = var.db_create_read_replica
   read_replica_instance_class = var.db_read_replica_instance_class
-  common_tags                 = local.common_tags
+
+  common_tags = local.common_tags
 }
 
 # Cache (Redis)
@@ -275,6 +276,12 @@ module "compute" {
   nightwatch_agent_image           = var.nightwatch_agent_image
   nightwatch_agent_cpu             = var.nightwatch_agent_cpu
   nightwatch_agent_memory          = var.nightwatch_agent_memory
+
+  # Scheduled scaling configuration
+  enable_scheduled_scaling    = var.enable_scheduled_scaling
+  scale_down_schedule         = var.scale_down_schedule
+  scale_up_schedule           = var.scale_up_schedule
+  weekend_scale_down_schedule = var.weekend_scale_down_schedule
 
   common_tags = local.common_tags
 }
