@@ -28,10 +28,14 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/production' && 'production' || (github.ref == 'refs/heads/uat' && 'uat' || 'staging') }}
 
     permissions:
       id-token: write
       contents: write
+
+    env:
+      ENVIRONMENT: ${{ github.ref == 'refs/heads/production' && 'production' || (github.ref == 'refs/heads/uat' && 'uat' || 'staging') }}
 
     steps:
       - name: Checkout code
@@ -39,21 +43,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Determine environment
-        id: env
-        run: |
-          if [[ ${{ github.ref }} == 'refs/heads/production' ]]; then
-            echo "environment=production" >> $GITHUB_OUTPUT
-          elif [[ ${{ github.ref }} == 'refs/heads/staging' ]]; then
-            echo "environment=staging" >> $GITHUB_OUTPUT
-          elif [[ ${{ github.ref }} == 'refs/heads/uat' ]]; then
-            echo "environment=uat" >> $GITHUB_OUTPUT
-          else
-            echo "environment=staging" >> $GITHUB_OUTPUT
-          fi
-
       - name: Generate version (production only)
-        if: steps.env.outputs.environment == 'production'
+        if: env.ENVIRONMENT == 'production'
         id: version
         run: |
           CURRENT_YEAR=$(date +%Y)
@@ -94,6 +85,34 @@ jobs:
         with:
           version: latest
 
+      - name: Check if base image exists
+        id: check-base-image
+        run: |
+          if aws ecr describe-images \
+            --repository-name ${{ env.APP_NAME }}-${{ env.ENVIRONMENT }}-base \
+            --image-ids imageTag=latest \
+            --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "✅ Base image exists, will use as cache"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️  Base image does not exist, building without registry cache"
+          fi
+
+      - name: Check if app cache image exists
+        id: check-app-cache
+        run: |
+          if aws ecr describe-images \
+            --repository-name ${{ env.APP_NAME }}-${{ env.ENVIRONMENT }} \
+            --image-ids imageTag=cache \
+            --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "✅ App cache image exists, will use as cache"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️  App cache image does not exist, building without app cache"
+          fi
+
       - name: Build and push base image
         uses: docker/build-push-action@v6
         with:
@@ -102,11 +121,11 @@ jobs:
           target: base
           push: true
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}-base:latest
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}-base:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ env.ENVIRONMENT }}-base:latest
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ env.ENVIRONMENT }}-base:${{ github.sha }}
           platforms: linux/amd64
           cache-from: |
-            type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}-base:latest
+            ${{ steps.check-base-image.outputs.exists == 'true' && format('type=registry,ref={0}/{1}-{2}-base:latest', steps.login-ecr.outputs.registry, env.APP_NAME, env.ENVIRONMENT) || '' }}
             type=gha,scope=base
           cache-to: type=gha,mode=max,scope=base
 
@@ -117,20 +136,20 @@ jobs:
           file: ${{ env.DOCKERFILE_PATH }}
           push: true
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}:${{ github.sha }}
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}:latest
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ env.ENVIRONMENT }}:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ env.ENVIRONMENT }}:latest
           platforms: linux/amd64
           cache-from: |
-            type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}-base:latest
-            type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}:cache
+            ${{ steps.check-base-image.outputs.exists == 'true' && format('type=registry,ref={0}/{1}-{2}-base:latest', steps.login-ecr.outputs.registry, env.APP_NAME, env.ENVIRONMENT) || '' }}
+            ${{ steps.check-app-cache.outputs.exists == 'true' && format('type=registry,ref={0}/{1}-{2}:cache', steps.login-ecr.outputs.registry, env.APP_NAME, env.ENVIRONMENT) || '' }}
             type=gha,scope=app
           cache-to: |
-            type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}:cache,mode=max
+            type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.APP_NAME }}-${{ env.ENVIRONMENT }}:cache,mode=max
             type=gha,mode=max,scope=app
 
       - name: Deploy to AWS ECS
         env:
-          ENVIRONMENT: ${{ steps.env.outputs.environment }}
+          ENVIRONMENT: ${{ env.ENVIRONMENT }}
         run: |
           echo "🚀 Deploying to AWS ECS..."
 
@@ -148,7 +167,7 @@ jobs:
       - name: Wait for ECS service to stabilize
         timeout-minutes: 15
         env:
-          ENVIRONMENT: ${{ steps.env.outputs.environment }}
+          ENVIRONMENT: ${{ env.ENVIRONMENT }}
         run: |
           set +e  # Don't exit on error, we want to capture diagnostics
 
@@ -281,8 +300,8 @@ jobs:
       - name: Run post-deploy Laravel commands
         timeout-minutes: 20
         env:
-          CLUSTER: ${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}
-          SERVICE: ${{ env.APP_NAME }}-${{ steps.env.outputs.environment }}-service
+          CLUSTER: ${{ env.APP_NAME }}-${{ env.ENVIRONMENT }}
+          SERVICE: ${{ env.APP_NAME }}-${{ env.ENVIRONMENT }}-service
         run: |
           set -euo pipefail
 
@@ -382,7 +401,7 @@ jobs:
           RETRY=0
           WAIT_SUCCESS=false
 
-          while [ "$RETRY" -lt "$MAX_RETRIES" ]; do
+          while [ $RETRY -lt $MAX_RETRIES ]; do
             RETRY=$((RETRY + 1))
             echo "⏳ Wait attempt $RETRY/$MAX_RETRIES..."
 
@@ -391,7 +410,7 @@ jobs:
               break
             else
               echo "⚠️  Wait command failed (attempt $RETRY/$MAX_RETRIES)"
-              if [ "$RETRY" -lt "$MAX_RETRIES" ]; then
+              if [ $RETRY -lt $MAX_RETRIES ]; then
                 echo "⏳ Retrying in 10 seconds..."
                 sleep 10
               fi
@@ -427,7 +446,7 @@ jobs:
           echo "✅ Post-deploy commands completed"
 
       - name: Create GitHub Release (production only)
-        if: steps.env.outputs.environment == 'production'
+        if: env.ENVIRONMENT == 'production'
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ steps.version.outputs.version }}
@@ -455,8 +474,8 @@ jobs:
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
         with:
-          environment: ${{ steps.env.outputs.environment }}
-          release: ${{ steps.env.outputs.environment == 'production' && steps.version.outputs.version || github.sha }}
+          environment: ${{ env.ENVIRONMENT }}
+          release: ${{ env.ENVIRONMENT == 'production' && steps.version.outputs.version || github.sha }}
           disable_telemetry: true
 
       - name: Microsoft Teams Notification
@@ -466,5 +485,5 @@ jobs:
         with:
           github-token: ${{ github.token }}
           ms-teams-webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URI }}
-          notification-summary: "Failed to deploy to ${{ steps.env.outputs.environment }} environment."
+          notification-summary: "Failed to deploy to ${{ env.ENVIRONMENT }} environment."
           notification-color: dc3545
