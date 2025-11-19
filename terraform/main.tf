@@ -381,6 +381,8 @@ module "bastion" {
   app_db_password                = var.app_db_password
   db_reporting_password          = var.db_reporting_password
   aws_region                     = var.aws_region
+  db_engine                      = var.db_engine
+  db_port                        = local.db_port
 
   tags = local.common_tags
 }
