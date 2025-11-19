@@ -236,12 +236,20 @@ variable "aurora_min_capacity" {
   description = "Minimum Aurora Capacity Units (ACUs) for Serverless v2. 0.5 to 128 in 0.5 increments. Each ACU provides ~2GB RAM."
   type        = number
   default     = 0.5
+  validation {
+    condition     = var.aurora_min_capacity >= 0.5 && var.aurora_min_capacity <= 128 && floor(var.aurora_min_capacity * 2) == var.aurora_min_capacity * 2
+    error_message = "aurora_min_capacity must be between 0.5 and 128 in 0.5 increments"
+  }
 }
 
 variable "aurora_max_capacity" {
   description = "Maximum Aurora Capacity Units (ACUs) for Serverless v2. 0.5 to 128 in 0.5 increments."
   type        = number
   default     = 1.0
+  validation {
+    condition     = var.aurora_max_capacity >= 0.5 && var.aurora_max_capacity <= 128 && floor(var.aurora_max_capacity * 2) == var.aurora_max_capacity * 2 && var.aurora_max_capacity >= var.aurora_min_capacity
+    error_message = "aurora_max_capacity must be between 0.5 and 128 in 0.5 increments and must be >= aurora_min_capacity"
+  }
 }
 
 variable "aurora_instance_count" {
