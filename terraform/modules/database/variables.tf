@@ -85,3 +85,43 @@ variable "read_replica_instance_class" {
   type        = string
   default     = ""
 }
+
+variable "db_engine" {
+  description = "Database engine type: mysql, mariadb, postgres, aurora-mysql, or aurora-postgresql"
+  type        = string
+  default     = "mysql"
+  validation {
+    condition     = contains(["mysql", "mariadb", "postgres", "aurora-mysql", "aurora-postgresql"], var.db_engine)
+    error_message = "db_engine must be one of: mysql, mariadb, postgres, aurora-mysql, or aurora-postgresql"
+  }
+}
+
+variable "db_engine_version" {
+  description = "Database engine version. Leave empty to use default for selected engine."
+  type        = string
+  default     = ""
+}
+
+variable "aurora_enable_serverlessv2" {
+  description = "Enable Aurora Serverless v2 scaling (only for Aurora engines)"
+  type        = bool
+  default     = false
+}
+
+variable "aurora_min_capacity" {
+  description = "Minimum Aurora Capacity Units (ACUs) for Serverless v2. 0.5 to 128 in 0.5 increments."
+  type        = number
+  default     = 0.5
+}
+
+variable "aurora_max_capacity" {
+  description = "Maximum Aurora Capacity Units (ACUs) for Serverless v2. 0.5 to 128 in 0.5 increments."
+  type        = number
+  default     = 1.0
+}
+
+variable "aurora_instance_count" {
+  description = "Number of Aurora instances to create (only for non-serverless Aurora)"
+  type        = number
+  default     = 1
+}

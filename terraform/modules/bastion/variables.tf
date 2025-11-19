@@ -142,3 +142,15 @@ variable "root_block_device_kms_key_id" {
   type        = string
   default     = ""
 }
+
+variable "db_engine" {
+  description = "Database engine type (mysql, mariadb, postgres, aurora-mysql, aurora-postgresql)"
+  type        = string
+  default     = "mysql"
+}
+
+variable "db_port" {
+  description = "Database port"
+  type        = number
+  default     = 3306
+}

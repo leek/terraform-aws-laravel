@@ -130,7 +130,9 @@ resource "aws_instance" "bastion" {
     app_db_password                = var.app_db_password
     db_reporting_password          = var.db_reporting_password
     aws_region                     = var.aws_region
-    setup_mysql_user               = var.rds_endpoint != "" && var.app_db_username != ""
+    db_engine                      = var.db_engine
+    db_port                        = var.db_port
+    setup_database_user            = var.rds_endpoint != "" && var.app_db_username != ""
   }))
 
   tags = merge(var.tags, {

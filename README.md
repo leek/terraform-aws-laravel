@@ -23,7 +23,10 @@ This isn't just another Laravel deployment template - it's a **production-grade,
   - Web service (handles HTTP traffic via ALB)
   - Queue worker service (processes SQS queue jobs)
   - Scheduler service (runs Laravel task scheduler)
-- **RDS MySQL** - Managed database with automated backups
+- **Database** - Flexible database options with automated backups
+  - RDS support: MySQL, MariaDB, PostgreSQL
+  - Aurora support: Aurora MySQL, Aurora PostgreSQL (with Serverless v2 option)
+  - Read replicas for RDS, reader endpoints for Aurora
 - **ElastiCache Redis** - Session and cache storage (single-node configuration)
 - **Application Load Balancer** - HTTPS traffic routing with AWS WAF
 - **S3** - File storage for Laravel filesystem
@@ -32,6 +35,7 @@ This isn't just another Laravel deployment template - it's a **production-grade,
 - **Route53** - DNS management and health checks
 
 ### Optional Features
+- **Aurora Serverless v2** - Auto-scaling database with per-second billing (optional)
 - **Meilisearch** - Fast, typo-tolerant search engine (optional)
 - **AWS SES** - Email sending capability (optional)
 - **Laravel Nightwatch** - Production monitoring and performance insights (optional)
@@ -89,8 +93,8 @@ The infrastructure deploys three separate ECS services:
     └───────┬──────────────┬──────────────┬──────────────┘
             │              │              │
     ┌───────▼────────┐  ┌──▼──────────┐  │
-    │ ElastiCache    │  │  RDS MySQL  │  │
-    │ Redis          │  │ (+ Replica) │  │
+    │ ElastiCache    │  │   Database  │  │
+    │ Redis          │  │  RDS/Aurora │  │
     └────────────────┘  └─────────────┘  │
             │                 │           │
             │           ┌─────▼──────┐    │
@@ -272,6 +276,156 @@ app_server_mode = "octane-frankenphp"
 > [!IMPORTANT]
 > Ensure your Laravel application is installed with the Octane package and is compatible with Octane (no global state, stateless services). See [Laravel Octane documentation](https://laravel.com/docs/octane) for details.
 
+### Database Configuration
+
+> [!IMPORTANT]
+> **Upgrading from a previous version?** If you have an existing MySQL deployment, see the [Migration Guide](MIGRATION.md) for required state migration steps to avoid database recreation.
+
+Choose the right database engine for your Laravel application:
+
+#### Available Database Engines
+
+**RDS Options (Traditional):**
+```hcl
+# MySQL - Most compatible, default choice
+db_engine = "mysql"
+db_engine_version = "8.0.43"  # Default if not specified
+
+# MariaDB - MySQL fork with additional features
+db_engine = "mariadb"
+db_engine_version = "10.11.9"  # Default if not specified
+
+# PostgreSQL - Advanced features, better for complex queries
+db_engine = "postgres"
+db_engine_version = "16.4"  # Default if not specified
+```
+
+**Aurora Options (Advanced):**
+```hcl
+# Aurora MySQL - Auto-scaling, better HA, serverless option
+db_engine = "aurora-mysql"
+db_engine_version = "8.0.mysql_aurora.3.07.1"  # Default if not specified
+
+# Aurora PostgreSQL - Auto-scaling, better HA, serverless option
+db_engine = "aurora-postgresql"
+db_engine_version = "16.4"  # Default if not specified
+```
+
+#### RDS vs Aurora Comparison
+
+**Choose RDS when:**
+- You need predictable costs
+- Your workload is steady and not spiky
+- You're running a small to medium application
+- You want simplicity over advanced features
+
+**Choose Aurora when:**
+- You need high availability (99.99% SLA)
+- Your workload has variable or unpredictable traffic
+- You need better read scaling (up to 15 read replicas)
+- You want automatic failover (faster than RDS Multi-AZ)
+- You need better performance (5x MySQL, 3x PostgreSQL)
+
+#### Aurora Serverless v2
+
+For variable workloads, Aurora Serverless v2 provides automatic scaling:
+
+```hcl
+db_engine = "aurora-mysql"  # or "aurora-postgresql"
+aurora_enable_serverlessv2 = true
+aurora_min_capacity = 0.5   # Minimum ACUs (2GB RAM)
+aurora_max_capacity = 4.0   # Maximum ACUs (8GB RAM)
+```
+
+**Benefits:**
+- Scales automatically based on load
+- Pay only for capacity used (per-second billing)
+- Instant scaling without downtime
+- Perfect for development, staging, or variable production workloads
+
+**ACU (Aurora Capacity Unit) Guide:**
+- 0.5 ACU = ~1GB RAM (minimum for dev/test)
+- 1 ACU = ~2GB RAM (good for light production)
+- 2-4 ACU = ~4-8GB RAM (moderate production)
+- 8+ ACU = ~16GB+ RAM (heavy production)
+
+#### Read Scaling
+
+**For RDS:**
+```hcl
+db_create_read_replica = true
+db_read_replica_instance_class = "db.t3.medium"  # Optional, defaults to primary
+```
+
+**For Aurora:**
+Aurora automatically provides a reader endpoint. Configure multiple instances:
+```hcl
+aurora_instance_count = 2  # Creates 1 writer + 1 reader
+# Aurora reader endpoint distributes read traffic automatically
+```
+
+#### Database Port Configuration
+
+The infrastructure automatically configures the correct port based on engine:
+- MySQL/MariaDB/Aurora MySQL: Port 3306
+- PostgreSQL/Aurora PostgreSQL: Port 5432
+
+#### Migration Considerations
+
+**From MySQL to MariaDB:**
+- Generally compatible, minimal changes needed
+- Test thoroughly, especially if using MySQL-specific features
+
+**From MySQL to PostgreSQL:**
+- Requires application code changes (different SQL syntax)
+- Update Laravel database driver configuration
+- Test all queries and migrations
+
+**From RDS to Aurora:**
+- Create Aurora cluster from RDS snapshot
+- Update connection strings to use cluster endpoint
+- For MySQL → Aurora MySQL: Mostly compatible
+- For PostgreSQL → Aurora PostgreSQL: Mostly compatible
+
+**Version Updates:**
+```hcl
+# Specify exact version for controlled upgrades
+db_engine_version = "8.0.35"  # Pin to specific version
+
+# Leave empty to use latest default version
+db_engine_version = ""  # Uses latest recommended version
+```
+
+#### Upgrading Existing Deployments
+
+**⚠️ Important for Existing MySQL Deployments**
+
+If you have an existing deployment using the previous version (MySQL-only), you'll need to migrate Terraform state to avoid database recreation:
+
+```bash
+# BEFORE running terraform apply with the new version
+# These commands update the Terraform state to match the new module structure
+
+# Migrate main RDS instance
+terraform state mv \
+  'module.database.module.rds' \
+  'module.database.module.rds[0]'
+
+# Migrate read replica (if you have one)
+terraform state mv \
+  'module.database.module.rds_read_replica' \
+  'module.database.module.rds_read_replica[0]'
+
+# Verify the state migration
+terraform plan  # Should show no changes to database resources
+```
+
+**Why is this needed?**
+
+The database module now uses conditional logic (`count`) to support both RDS and Aurora. This changes the resource addresses in Terraform state. Without migration, Terraform would try to destroy and recreate your database.
+
+**For new deployments:** No migration needed - just configure and deploy.
+
 ### Minimal Configuration
 
 For a basic setup (good for staging/development):
@@ -348,7 +502,8 @@ desired_count        = 3
 min_capacity         = 2
 max_capacity         = 10
 
-# Production database settings
+# Production database settings - Option 1: RDS with Multi-AZ
+db_engine                    = "mysql"  # or "postgres", "mariadb"
 db_instance_class            = "db.t3.large"
 db_allocated_storage         = 100
 db_max_allocated_storage     = 1000
@@ -356,6 +511,23 @@ db_multi_az                  = true
 enable_performance_insights  = true
 enable_deletion_protection   = true
 db_create_read_replica       = true
+
+# Production database settings - Option 2: Aurora Serverless v2 (recommended for variable loads)
+# db_engine                   = "aurora-mysql"  # or "aurora-postgresql"
+# aurora_enable_serverlessv2  = true
+# aurora_min_capacity         = 2.0   # Minimum ACUs
+# aurora_max_capacity         = 16.0  # Maximum ACUs
+# db_multi_az                 = true
+# enable_performance_insights = true
+# enable_deletion_protection  = true
+
+# Production database settings - Option 3: Aurora Provisioned (recommended for consistent loads)
+# db_engine                   = "aurora-mysql"  # or "aurora-postgresql"
+# db_instance_class           = "db.r6g.large"
+# aurora_instance_count       = 2  # 1 writer + 1 reader
+# db_multi_az                 = true
+# enable_performance_insights = true
+# enable_deletion_protection  = true
 
 # Production Redis (note: currently single-node only)
 redis_node_type = "cache.t3.medium"
@@ -761,7 +933,7 @@ aws macie2 list-findings
 
 ## Database Users
 
-Three database users are automatically configured:
+Three database users are automatically configured for all database engines:
 
 1. **Master User** (`admin`)
    - Full administrative access
@@ -772,11 +944,14 @@ Three database users are automatically configured:
    - CRUD operations + migrations
    - Used by Laravel application
    - Created automatically by bastion host
+   - Works with MySQL, MariaDB, PostgreSQL, and Aurora
 
 3. **Reporting User** (`reporting`)
    - Read-only access
    - For BI tools and analytics
    - Safe for external reporting tools
+
+> **Note**: User creation commands are engine-specific and handled automatically by the bastion host initialization script.
 
 ## Monitoring & Alerts
 
@@ -871,16 +1046,36 @@ redis_node_type = "cache.t3.medium"  # or cache.r6g.large, etc.
 
 ### Database Scaling
 
-**Vertical**: Change instance class:
+**Vertical (RDS)**: Change instance class:
 ```hcl
 db_instance_class = "db.t3.large"  # or db.r6g.xlarge, etc.
 ```
 
-**Storage**: Enable auto-scaling:
+**Vertical (Aurora)**: Change instance class or use Serverless v2:
+```hcl
+# Provisioned instances
+db_instance_class = "db.r6g.large"
+aurora_instance_count = 2  # Scale out for read capacity
+
+# Or use Serverless v2 for automatic scaling
+aurora_enable_serverlessv2 = true
+aurora_min_capacity = 0.5   # Minimum ACUs
+aurora_max_capacity = 16.0  # Maximum ACUs (scales automatically)
+```
+
+**Horizontal (Aurora)**: Add read replicas:
+```hcl
+aurora_instance_count = 3  # 1 writer + 2 readers
+# Aurora reader endpoint automatically load balances
+```
+
+**Storage (RDS only)**: Enable auto-scaling:
 ```hcl
 db_allocated_storage     = 100
 db_max_allocated_storage = 1000  # Auto-grow to 1TB
 ```
+
+> **Note**: Aurora storage scales automatically up to 128TB, no configuration needed.
 
 ## Cost Optimization
 
@@ -1048,7 +1243,7 @@ terraform/
     ├── compute/                # ECS Fargate cluster (web + queue-worker + scheduler)
     ├── configuration/          # SSM parameters
     ├── container_registry/     # ECR repository
-    ├── database/               # RDS MySQL
+    ├── database/               # Database (RDS: MySQL/MariaDB/PostgreSQL, Aurora: MySQL/PostgreSQL)
     ├── dns/                    # Route53 records
     ├── email/                  # SES configuration (optional)
     ├── load_balancer/          # ALB + WAF
