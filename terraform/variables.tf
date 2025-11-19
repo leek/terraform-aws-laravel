@@ -256,6 +256,10 @@ variable "aurora_instance_count" {
   description = "Number of Aurora instances to create (only for non-serverless Aurora). Minimum 1 for single-AZ, 2+ for Multi-AZ."
   type        = number
   default     = 1
+  validation {
+    condition     = self.value >= 1
+    error_message = "aurora_instance_count must be at least 1"
+  }
 }
 
 # ========================================
