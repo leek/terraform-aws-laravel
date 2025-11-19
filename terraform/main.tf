@@ -25,6 +25,16 @@ locals {
     uat        = "uat"
     production = "production"
   }
+
+  # Database port mapping based on engine type
+  db_port_map = {
+    mysql              = 3306
+    mariadb            = 3306
+    postgres           = 5432
+    aurora-mysql       = 3306
+    aurora-postgresql  = 5432
+  }
+  db_port = local.db_port_map[var.db_engine]
 }
 
 # ========================================
@@ -79,6 +89,7 @@ module "networking" {
   aws_region         = var.aws_region
   vpc_cidr           = var.vpc_cidr
   availability_zones = data.aws_availability_zones.available.names
+  db_port            = local.db_port
   common_tags        = local.common_tags
 }
 
@@ -137,6 +148,8 @@ module "database" {
   vpc_id                      = module.networking.vpc_id
   private_subnets             = module.networking.private_subnets
   rds_security_group_id       = module.networking.rds_security_group_id
+  db_engine                   = var.db_engine
+  db_engine_version           = var.db_engine_version
   db_instance_class           = var.db_instance_class
   db_allocated_storage        = var.db_allocated_storage
   db_max_allocated_storage    = var.db_max_allocated_storage
@@ -146,6 +159,10 @@ module "database" {
   enable_deletion_protection  = var.enable_deletion_protection
   create_read_replica         = var.db_create_read_replica
   read_replica_instance_class = var.db_read_replica_instance_class
+  aurora_enable_serverlessv2  = var.aurora_enable_serverlessv2
+  aurora_min_capacity         = var.aurora_min_capacity
+  aurora_max_capacity         = var.aurora_max_capacity
+  aurora_instance_count       = var.aurora_instance_count
   common_tags                 = local.common_tags
 }
 
@@ -372,12 +389,12 @@ module "bastion" {
 resource "aws_security_group_rule" "bastion_to_rds" {
   count                    = var.enable_bastion ? 1 : 0
   type                     = "ingress"
-  from_port                = 3306
-  to_port                  = 3306
+  from_port                = module.database.rds_port
+  to_port                  = module.database.rds_port
   protocol                 = "tcp"
   source_security_group_id = module.bastion[0].security_group_id
   security_group_id        = module.networking.rds_security_group_id
-  description              = "Allow MySQL access from bastion host"
+  description              = "Allow database access from bastion host"
 }
 
 # Client VPN - Optional
