@@ -278,6 +278,9 @@ app_server_mode = "octane-frankenphp"
 
 ### Database Configuration
 
+> [!IMPORTANT]
+> **Upgrading from a previous version?** If you have an existing MySQL deployment, see the [Migration Guide](MIGRATION.md) for required state migration steps to avoid database recreation.
+
 Choose the right database engine for your Laravel application:
 
 #### Available Database Engines
@@ -392,6 +395,36 @@ db_engine_version = "8.0.35"  # Pin to specific version
 # Leave empty to use latest default version
 db_engine_version = ""  # Uses latest recommended version
 ```
+
+#### Upgrading Existing Deployments
+
+**⚠️ Important for Existing MySQL Deployments**
+
+If you have an existing deployment using the previous version (MySQL-only), you'll need to migrate Terraform state to avoid database recreation:
+
+```bash
+# BEFORE running terraform apply with the new version
+# These commands update the Terraform state to match the new module structure
+
+# Migrate main RDS instance
+terraform state mv \
+  'module.database.module.rds' \
+  'module.database.module.rds[0]'
+
+# Migrate read replica (if you have one)
+terraform state mv \
+  'module.database.module.rds_read_replica' \
+  'module.database.module.rds_read_replica[0]'
+
+# Verify the state migration
+terraform plan  # Should show no changes to database resources
+```
+
+**Why is this needed?**
+
+The database module now uses conditional logic (`count`) to support both RDS and Aurora. This changes the resource addresses in Terraform state. Without migration, Terraform would try to destroy and recreate your database.
+
+**For new deployments:** No migration needed - just configure and deploy.
 
 ### Minimal Configuration
 
