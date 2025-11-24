@@ -40,7 +40,7 @@ RUN set -o pipefail && \
 # ========================================
 # Stage: Base image with PHP extensions
 # ========================================
-FROM php:8.4-fpm-alpine AS base
+FROM php:8.5-fpm-alpine AS base
 
 # Update Alpine packages to get security patches including libxml2
 RUN apk update && apk upgrade --no-cache
