@@ -31,6 +31,10 @@ locals {
       value = ".${var.domain_name}"
     },
     {
+      name  = "SESSION_COOKIE"
+      value = "${var.app_name}_session_${var.environment}"
+    },
+    {
       name  = "REDIS_HOST"
       value = var.redis_endpoint
     },
