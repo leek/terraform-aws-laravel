@@ -58,3 +58,15 @@ variable "common_tags" {
   description = "Common tags for all resources"
   type        = map(string)
 }
+
+variable "cpu" {
+  description = "CPU units for the Meilisearch task"
+  type        = number
+  default     = 256
+}
+
+variable "memory" {
+  description = "Memory (MB) for the Meilisearch task"
+  type        = number
+  default     = 512
+}
