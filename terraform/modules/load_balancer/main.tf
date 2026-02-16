@@ -149,10 +149,79 @@ resource "aws_wafv2_web_acl" "main" {
     }
   }
 
+  # AWS Managed Rules - PHP Application Protection
+  rule {
+    name     = "AWSManagedRulesPHPRuleSet"
+    priority = 5
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesPHPRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "PHPRuleSetMetric"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # AWS Managed Rules - SQL Injection Protection
+  rule {
+    name     = "AWSManagedRulesSQLiRuleSet"
+    priority = 6
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesSQLiRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "SQLiRuleSetMetric"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # AWS Managed Rules - Linux Operating System Protection
+  rule {
+    name     = "AWSManagedRulesLinuxRuleSet"
+    priority = 7
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesLinuxRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "LinuxRuleSetMetric"
+      sampled_requests_enabled   = true
+    }
+  }
+
   # Rate limiting rule
   rule {
     name     = "RateLimitRule"
-    priority = 5
+    priority = 8
 
     action {
       block {}
