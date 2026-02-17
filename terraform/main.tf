@@ -28,11 +28,11 @@ locals {
 
   # Database port mapping based on engine type
   db_port_map = {
-    mysql              = 3306
-    mariadb            = 3306
-    postgres           = 5432
-    aurora-mysql       = 3306
-    aurora-postgresql  = 5432
+    mysql             = 3306
+    mariadb           = 3306
+    postgres          = 5432
+    aurora-mysql      = 3306
+    aurora-postgresql = 5432
   }
   db_port = local.db_port_map[var.db_engine]
 }
@@ -188,6 +188,8 @@ module "storage" {
   aws_region                 = var.aws_region
   caller_identity_account_id = data.aws_caller_identity.current.account_id
   s3_filesystem_kms_key_arn  = module.security.s3_filesystem_kms_key_arn
+  certificate_arn            = module.certificates.certificate_arn
+  enable_cloudfront          = var.enable_cloudfront
   common_tags                = local.common_tags
 }
 
@@ -254,7 +256,6 @@ module "configuration" {
   app_db_username            = var.app_db_username
   app_db_password            = var.app_db_password
   rds_read_replica_endpoint  = module.database.rds_read_replica_endpoint != null ? module.database.rds_read_replica_endpoint : ""
-  sentry_dsn                 = var.sentry_dsn
   aws_region                 = var.aws_region
   aws_access_key_id          = module.security.laravel_user_access_key_id
   aws_secret_access_key      = module.security.laravel_user_secret_access_key
@@ -279,6 +280,7 @@ module "compute" {
   ecs_task_role_arn          = module.security.ecs_task_role_arn
   log_group_name             = module.monitoring.log_group_name
   s3_filesystem_bucket_name  = module.storage.app_filesystem_bucket_name
+  cloudfront_domain          = var.cloudfront_domain
   sqs_queue_name             = module.messaging.queue_name
   caller_identity_account_id = data.aws_caller_identity.current.account_id
 
@@ -379,7 +381,7 @@ module "bastion" {
   rds_database_name              = module.database.rds_database_name
   app_db_username                = var.app_db_username
   app_db_password                = var.app_db_password
-  db_reporting_password          = var.db_reporting_password
+  db_read_only_password               = var.db_read_only_password
   aws_region                     = var.aws_region
   db_engine                      = var.db_engine
   db_port                        = local.db_port

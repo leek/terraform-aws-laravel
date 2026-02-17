@@ -6,7 +6,7 @@
 locals {
   # Determine if this is an Aurora deployment
   is_aurora = startswith(var.db_engine, "aurora-")
-  
+
   # Map engine types to their configuration
   engine_config = {
     mysql = {
@@ -45,10 +45,10 @@ locals {
       port                 = 5432
     }
   }
-  
+
   # Get current engine config
   current_engine = local.engine_config[var.db_engine]
-  
+
   # Determine instance class for Aurora vs RDS
   # Aurora Serverless v2 uses db.serverless, otherwise use provided instance class
   effective_instance_class = local.is_aurora && var.aurora_enable_serverlessv2 ? "db.serverless" : var.db_instance_class
@@ -234,8 +234,8 @@ module "aurora" {
     serverless = {
       instance_class = "db.serverless"
     }
-  } : { for i in range(var.aurora_instance_count) : "instance-${i + 1}" => {
-    instance_class = var.db_instance_class
+    } : { for i in range(var.aurora_instance_count) : "instance-${i + 1}" => {
+      instance_class = var.db_instance_class
   } }
 
   # Serverless v2 scaling configuration
@@ -253,7 +253,7 @@ module "aurora" {
   }
 
   # Use security group from networking module
-  create_security_group = false
+  create_security_group  = false
   vpc_security_group_ids = [var.rds_security_group_id]
 
   storage_encrypted = true

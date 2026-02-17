@@ -43,7 +43,7 @@ github_repo = "your-repo"
 app_db_password = "CHANGE_ME_STRONG_PASSWORD"
 
 # Read-only reporting user password (for analytics/BI tools)
-db_reporting_password = "CHANGE_ME_STRONG_PASSWORD"
+db_read_only_password = "CHANGE_ME_STRONG_PASSWORD"
 
 # ========================================
 # OPTIONAL: Search Configuration
@@ -335,13 +335,6 @@ healthcheck_alarm_emails = []
 
 # Enable ALB access logs (useful for WAF triage and debugging)
 enable_alb_access_logs = false
-
-# ========================================
-# OPTIONAL: Error Tracking (Sentry)
-# ========================================
-
-# Sentry DSN for error tracking (leave empty to disable)
-sentry_dsn = ""
 
 # ========================================
 # OPTIONAL: Additional Environment Variables

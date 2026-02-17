@@ -95,7 +95,7 @@ variable "app_db_password" {
   default     = ""
 }
 
-variable "db_reporting_password" {
+variable "db_read_only_password" {
   description = "Read-only reporting database password"
   type        = string
   sensitive   = true

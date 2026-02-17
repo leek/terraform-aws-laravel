@@ -52,16 +52,6 @@ resource "aws_ssm_parameter" "db_password" {
   tags = var.common_tags
 }
 
-resource "aws_ssm_parameter" "sentry_dsn" {
-  name      = "/${var.app_name}/${var.environment}/SENTRY_LARAVEL_DSN"
-  type      = "SecureString"
-  value     = var.sentry_dsn
-  key_id    = var.parameter_store_kms_key_id
-  overwrite = true
-
-  tags = var.common_tags
-}
-
 # AWS IAM Credentials (secrets only - bucket/region are plain env vars in compute module)
 resource "aws_ssm_parameter" "aws_access_key_id" {
   name      = "/${var.app_name}/${var.environment}/AWS_ACCESS_KEY_ID"

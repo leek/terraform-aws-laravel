@@ -165,10 +165,10 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER,
       CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, CREATE VIEW,
       SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, TRIGGER, REFERENCES
 ON \`${rds_database_name}\`.* TO '${app_db_username}'@'%';
-CREATE USER IF NOT EXISTS 'reporting'@'%' IDENTIFIED BY '${db_reporting_password}';
-GRANT SELECT, SHOW VIEW ON \`${rds_database_name}\`.* TO 'reporting'@'%';
+CREATE USER IF NOT EXISTS 'read_only'@'%' IDENTIFIED BY '${db_read_only_password}';
+GRANT SELECT, SHOW VIEW ON \`${rds_database_name}\`.* TO 'read_only'@'%';
 FLUSH PRIVILEGES;
-SELECT User, Host FROM mysql.user WHERE User IN ('${app_db_username}', 'reporting');
+SELECT User, Host FROM mysql.user WHERE User IN ('${app_db_username}', 'read_only');
 MYSQL_SCRIPT
   DB_EXIT_CODE=$?
 else
@@ -190,22 +190,22 @@ GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${app_db_username};
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO ${app_db_username};
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO ${app_db_username};
 
--- Create reporting user if not exists
+-- Create read-only user if not exists
 DO \$\$
 BEGIN
-  IF NOT EXISTS (SELECT FROM pg_catalog.pg_user WHERE usename = 'reporting') THEN
-    CREATE USER reporting WITH PASSWORD '${db_reporting_password}';
+  IF NOT EXISTS (SELECT FROM pg_catalog.pg_user WHERE usename = 'read_only') THEN
+    CREATE USER read_only WITH PASSWORD '${db_read_only_password}';
   END IF;
 END
 \$\$;
 
--- Grant read-only privileges to reporting user
-GRANT CONNECT ON DATABASE ${rds_database_name} TO reporting;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO reporting;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO reporting;
+-- Grant read-only privileges to read_only user
+GRANT CONNECT ON DATABASE ${rds_database_name} TO read_only;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO read_only;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO read_only;
 
 -- List created users
-SELECT usename FROM pg_catalog.pg_user WHERE usename IN ('${app_db_username}', 'reporting');
+SELECT usename FROM pg_catalog.pg_user WHERE usename IN ('${app_db_username}', 'read_only');
 POSTGRES_SCRIPT
   DB_EXIT_CODE=$?
 fi
@@ -213,7 +213,7 @@ fi
 unset MASTER_PASSWORD
 
 if [ "$DB_EXIT_CODE" -eq 0 ]; then
-  log "Database application and reporting users created successfully"
+  log "Database application and read-only users created successfully"
 else
   log "ERROR: Failed to create database users"
 fi

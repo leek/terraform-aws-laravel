@@ -5,59 +5,69 @@
 # ========================================
 FROM alpine:latest AS binaries
 
+ARG APP_SERVER_MODE=php-fpm
 ARG RR_VERSION=v2025.1.4
 ARG FP_VERSION=v1.9.1
 
 RUN apk add --no-cache curl
 
-# Download RoadRunner binary for Laravel Octane
+# Download RoadRunner binary for Laravel Octane (only when needed)
 RUN set -o pipefail && \
-    ARCH="$(uname -m)" && \
-    case "$ARCH" in \
-    x86_64) RR_ARCH="amd64" ;; \
-    aarch64|arm64) RR_ARCH="arm64" ;; \
-    *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
-    esac && \
-    mkdir -p /tmp/rr && \
-    curl -sSL https://github.com/roadrunner-server/roadrunner/releases/download/${RR_VERSION}/roadrunner-${RR_VERSION#v}-linux-${RR_ARCH}.tar.gz \
-    | tar -xz -C /tmp/rr && \
-    find /tmp/rr -type f \( -name 'rr' -o -name 'roadrunner' \) | head -1 | xargs -I {} mv {} /usr/local/bin/roadrunner && \
-    chmod +x /usr/local/bin/roadrunner && \
-    rm -rf /tmp/rr
+    if [ "$APP_SERVER_MODE" = "octane-roadrunner" ]; then \
+      ARCH="$(uname -m)" && \
+      case "$ARCH" in \
+        x86_64) RR_ARCH="amd64" ;; \
+        aarch64|arm64) RR_ARCH="arm64" ;; \
+        *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+      esac && \
+      mkdir -p /tmp/rr && \
+      curl -sSL https://github.com/roadrunner-server/roadrunner/releases/download/${RR_VERSION}/roadrunner-${RR_VERSION#v}-linux-${RR_ARCH}.tar.gz \
+        | tar -xz -C /tmp/rr && \
+      find /tmp/rr -type f \( -name 'rr' -o -name 'roadrunner' \) | head -1 | xargs -I {} mv {} /usr/local/bin/roadrunner && \
+      chmod +x /usr/local/bin/roadrunner && \
+      rm -rf /tmp/rr; \
+    else \
+      touch /usr/local/bin/roadrunner; \
+    fi
 
-# Download FrankenPHP binary for Laravel Octane
+# Download FrankenPHP binary for Laravel Octane (only when needed)
 RUN set -o pipefail && \
-    ARCH="$(uname -m)" && \
-    case "$ARCH" in \
-    x86_64) FP_ARCH="x86_64" ;; \
-    aarch64|arm64) FP_ARCH="aarch64" ;; \
-    *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
-    esac && \
-    curl -sSL https://github.com/dunglas/frankenphp/releases/download/${FP_VERSION}/frankenphp-linux-${FP_ARCH} \
-    -o /usr/local/bin/frankenphp && \
-    chmod +x /usr/local/bin/frankenphp
+    if [ "$APP_SERVER_MODE" = "octane-frankenphp" ]; then \
+      ARCH="$(uname -m)" && \
+      case "$ARCH" in \
+        x86_64) FP_ARCH="x86_64" ;; \
+        aarch64|arm64) FP_ARCH="aarch64" ;; \
+        *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+      esac && \
+      curl -sSL https://github.com/dunglas/frankenphp/releases/download/${FP_VERSION}/frankenphp-linux-${FP_ARCH} \
+        -o /usr/local/bin/frankenphp && \
+      chmod +x /usr/local/bin/frankenphp; \
+    else \
+      touch /usr/local/bin/frankenphp; \
+    fi
 
 # ========================================
 # Stage: Base image with PHP extensions
 # ========================================
-FROM php:8.5.3-fpm-alpine AS base
+FROM php:8.4-fpm-alpine AS base
 
-# Update Alpine packages to get security patches including libxml2
-RUN apk update && apk upgrade --no-cache
+ARG APP_SERVER_MODE=php-fpm
+ARG INSTALL_PGSQL=false
 
-# Install system dependencies required for extensions
-RUN apk add --no-cache \
+# Install system dependencies (merged apk update + upgrade + add into one layer)
+RUN apk update && apk upgrade --no-cache && \
+    apk add --no-cache \
     # For gd
     libpng-dev \
     libjpeg-turbo-dev \
     freetype-dev \
     # For zip
     libzip-dev \
-    # For pgsql
-    postgresql-dev \
     # For intl
     icu-dev \
     oniguruma-dev \
+    # For soap
+    libxml2-dev \
     # For uv
     libuv-dev \
     linux-headers \
@@ -68,20 +78,20 @@ RUN apk add --no-cache \
     libtool \
     nasm \
     git \
-    openssl \
     # Runtime deps for the final image
     nginx \
     supervisor \
     mysql-client \
     openssh-client \
-    nano
+    nano && \
+    # PostgreSQL dev libs - only when INSTALL_PGSQL=true
+    if [ "$INSTALL_PGSQL" = "true" ]; then apk add --no-cache postgresql-dev; fi
 
 # Install PHP extensions
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) \
     pdo \
     pdo_mysql \
-    pdo_pgsql \
     gd \
     mbstring \
     intl \
@@ -90,9 +100,16 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     zip \
     pcntl \
     sockets \
-    # PECL - Install redis and swoole (for Laravel Octane with Swoole)
-    && pecl install redis swoole \
-    && docker-php-ext-enable redis swoole \
+    soap \
+    # PostgreSQL - only when INSTALL_PGSQL=true
+    && if [ "$INSTALL_PGSQL" = "true" ]; then docker-php-ext-install pdo_pgsql; fi \
+    # PECL - redis is always installed
+    && pecl install redis \
+    && docker-php-ext-enable redis \
+    # Swoole - only when using octane-swoole
+    && if [ "$APP_SERVER_MODE" = "octane-swoole" ]; then \
+        pecl install swoole && docker-php-ext-enable swoole; \
+    fi \
     # Cleanup after PHP extensions are built
     && apk del build-base autoconf automake libtool nasm git \
     && rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
@@ -122,17 +139,13 @@ RUN apk add --no-cache \
     zip \
     python3 \
     nodejs \
-    npm \
-    autoconf \
-    automake \
-    libtool \
-    build-base
+    npm
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Copy dependency files
-COPY composer.json composer.lock auth.json* package.json package-lock.json ./
+COPY composer.json composer.lock auth.json* package.json package-lock.json .npmrc* ./
 
 # Copy optional vendor-src and patches directories if they exist
 RUN --mount=type=bind,source=.,target=/src \
@@ -181,7 +194,7 @@ WORKDIR /var/www/html
 # Copy built application from the builder stage
 COPY --from=builder --chown=www-data:www-data /var/www/html .
 
-# Copy Octane binaries from binaries stage
+# Copy Octane binaries from binaries stage (empty placeholders when not needed)
 COPY --from=binaries /usr/local/bin/roadrunner /usr/local/bin/roadrunner
 COPY --from=binaries /usr/local/bin/frankenphp /usr/local/bin/frankenphp
 
