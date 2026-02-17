@@ -209,6 +209,17 @@ variable "additional_environment_variables" {
   default = []
 }
 
+variable "cloudfront_domain" {
+  description = "Custom domain for CloudFront CDN (e.g. cdn.example.com). Leave empty to use direct S3 URLs."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.cloudfront_domain == "" || !can(regex("^https?://", var.cloudfront_domain))
+    error_message = "cloudfront_domain must be a bare domain (no protocol). Example: cdn.example.com"
+  }
+}
+
 variable "common_tags" {
   description = "Common tags for all resources"
   type        = map(string)

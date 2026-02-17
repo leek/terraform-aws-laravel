@@ -64,4 +64,8 @@ output "macie_findings_bucket_arn" {
   value       = aws_s3_bucket.macie_findings.arn
 }
 
-
+# CloudFront
+output "cloudfront_distribution_domain" {
+  description = "Domain name of the CloudFront distribution (if enabled)"
+  value       = var.enable_cloudfront ? aws_cloudfront_distribution.cdn[0].domain_name : ""
+}

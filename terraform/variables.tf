@@ -50,7 +50,7 @@ variable "app_db_password" {
   sensitive   = true
 }
 
-variable "db_reporting_password" {
+variable "db_read_only_password" {
   description = "Password for the read-only reporting database user"
   type        = string
   sensitive   = true
@@ -546,13 +546,24 @@ variable "blocked_uri_patterns" {
 }
 
 # ========================================
-# OPTIONAL: Error Tracking (Sentry)
+# OPTIONAL: CloudFront CDN
 # ========================================
 
-variable "sentry_dsn" {
-  description = "Sentry DSN for error tracking"
+variable "enable_cloudfront" {
+  description = "Enable CloudFront CDN distribution for S3 assets"
+  type        = bool
+  default     = false
+}
+
+variable "cloudfront_domain" {
+  description = "Custom domain for CloudFront distribution (e.g. cdn.example.com). Leave empty to skip."
   type        = string
   default     = ""
+
+  validation {
+    condition     = var.cloudfront_domain == "" || !can(regex("^https?://", var.cloudfront_domain))
+    error_message = "cloudfront_domain must be a bare domain (no protocol). Example: cdn.example.com"
+  }
 }
 
 # ========================================

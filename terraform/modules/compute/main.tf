@@ -84,7 +84,27 @@ locals {
     },
     {
       name  = "AWS_URL"
-      value = "https://${var.s3_filesystem_bucket_name}.s3.${var.aws_region}.amazonaws.com"
+      value = var.cloudfront_domain != "" ? "https://${var.cloudfront_domain}" : "https://${var.s3_filesystem_bucket_name}.s3.${var.aws_region}.amazonaws.com"
+    },
+    {
+      name  = "PUBLIC_DISK_DRIVER"
+      value = "s3"
+    },
+    {
+      name  = "PUBLIC_DISK_ROOT"
+      value = "public"
+    },
+    {
+      name  = "PUBLIC_DISK_URL"
+      value = var.cloudfront_domain != "" ? "https://${var.cloudfront_domain}/public" : "https://${var.s3_filesystem_bucket_name}.s3.${var.aws_region}.amazonaws.com/public"
+    },
+    {
+      name  = "PRIVATE_DISK_DRIVER"
+      value = "s3"
+    },
+    {
+      name  = "PRIVATE_DISK_ROOT"
+      value = "private"
     }
     ], var.additional_environment_variables, var.enable_nightwatch ? [
     {
@@ -134,10 +154,6 @@ locals {
     {
       name      = "DB_WRITE_HOST"
       valueFrom = "arn:aws:ssm:${var.aws_region}:${var.caller_identity_account_id}:parameter/${var.app_name}/${var.environment}/DB_HOST"
-    },
-    {
-      name      = "SENTRY_LARAVEL_DSN"
-      valueFrom = "arn:aws:ssm:${var.aws_region}:${var.caller_identity_account_id}:parameter/${var.app_name}/${var.environment}/SENTRY_LARAVEL_DSN"
     },
     {
       name      = "AWS_ACCESS_KEY_ID"

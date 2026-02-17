@@ -45,12 +45,6 @@ variable "app_db_password" {
   sensitive   = true
 }
 
-variable "sentry_dsn" {
-  description = "Sentry DSN"
-  type        = string
-  default     = ""
-}
-
 variable "common_tags" {
   description = "Common tags for all resources"
   type        = map(string)
