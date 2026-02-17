@@ -77,19 +77,23 @@ module "rds_security_group" {
   version = "~> 5.0"
 
   name        = "${var.app_name}-${var.environment}-rds-sg"
-  description = "Security group for RDS database"
+  description = "Security group for RDS/Aurora database"
   vpc_id      = module.vpc.vpc_id
 
   ingress_with_source_security_group_id = [
     {
-      rule                     = "mysql-tcp"
+      from_port                = var.db_port
+      to_port                  = var.db_port
+      protocol                 = "tcp"
       source_security_group_id = module.ecs_security_group.security_group_id
-      description              = "Allow MySQL access from ECS tasks"
+      description              = "Allow database access from ECS tasks"
     },
     {
-      rule                     = "mysql-tcp"
+      from_port                = var.db_port
+      to_port                  = var.db_port
+      protocol                 = "tcp"
       source_security_group_id = module.vpn_security_group.security_group_id
-      description              = "Allow MySQL access from VPN clients"
+      description              = "Allow database access from VPN clients"
     }
   ]
 

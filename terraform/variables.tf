@@ -155,20 +155,36 @@ variable "scheduler_desired_count" {
 # Database Configuration
 # ========================================
 
+variable "db_engine" {
+  description = "Database engine: mysql, mariadb, postgres, aurora-mysql, or aurora-postgresql. Aurora provides better scalability and high availability."
+  type        = string
+  default     = "mysql"
+  validation {
+    condition     = contains(["mysql", "mariadb", "postgres", "aurora-mysql", "aurora-postgresql"], var.db_engine)
+    error_message = "db_engine must be one of: mysql, mariadb, postgres, aurora-mysql, or aurora-postgresql"
+  }
+}
+
+variable "db_engine_version" {
+  description = "Database engine version. Leave empty to use default version for selected engine. Defaults: MySQL 8.0.43, MariaDB 10.11.9, PostgreSQL 16.4, Aurora MySQL 8.0.mysql_aurora.3.07.1, Aurora PostgreSQL 16.4"
+  type        = string
+  default     = ""
+}
+
 variable "db_instance_class" {
-  description = "RDS instance class"
+  description = "RDS/Aurora instance class. For Aurora Serverless v2, use db.serverless"
   type        = string
   default     = "db.t3.micro"
 }
 
 variable "db_allocated_storage" {
-  description = "Initial storage allocation for RDS (GB)"
+  description = "Initial storage allocation for RDS (GB). Not applicable for Aurora."
   type        = number
   default     = 20
 }
 
 variable "db_max_allocated_storage" {
-  description = "Maximum storage for autoscaling (GB). Set to 0 to disable. Recommended: 100+ for production"
+  description = "Maximum storage for autoscaling (GB). Set to 0 to disable. Recommended: 100+ for production. Not applicable for Aurora."
   type        = number
   default     = 0
 }
@@ -192,7 +208,7 @@ variable "db_multi_az" {
 }
 
 variable "db_create_read_replica" {
-  description = "Create a read replica for the RDS instance (useful for reporting/analytics)"
+  description = "Create a read replica for the RDS instance (useful for reporting/analytics). For Aurora, use reader endpoint instead."
   type        = bool
   default     = false
 }
@@ -207,6 +223,43 @@ variable "app_db_username" {
   description = "Username for the application database user (created by bastion)"
   type        = string
   default     = "app_user"
+}
+
+# Aurora-specific configuration
+variable "aurora_enable_serverlessv2" {
+  description = "Enable Aurora Serverless v2 for automatic scaling (only for Aurora engines). Provides cost optimization and automatic capacity scaling."
+  type        = bool
+  default     = false
+}
+
+variable "aurora_min_capacity" {
+  description = "Minimum Aurora Capacity Units (ACUs) for Serverless v2. 0.5 to 128 in 0.5 increments. Each ACU provides ~2GB RAM."
+  type        = number
+  default     = 0.5
+  validation {
+    condition     = var.aurora_min_capacity >= 0.5 && var.aurora_min_capacity <= 128 && floor(var.aurora_min_capacity * 2) == var.aurora_min_capacity * 2
+    error_message = "aurora_min_capacity must be between 0.5 and 128 in 0.5 increments"
+  }
+}
+
+variable "aurora_max_capacity" {
+  description = "Maximum Aurora Capacity Units (ACUs) for Serverless v2. 0.5 to 128 in 0.5 increments."
+  type        = number
+  default     = 1.0
+  validation {
+    condition     = var.aurora_max_capacity >= 0.5 && var.aurora_max_capacity <= 128 && floor(var.aurora_max_capacity * 2) == var.aurora_max_capacity * 2 && var.aurora_max_capacity >= var.aurora_min_capacity
+    error_message = "aurora_max_capacity must be between 0.5 and 128 in 0.5 increments and must be >= aurora_min_capacity"
+  }
+}
+
+variable "aurora_instance_count" {
+  description = "Number of Aurora instances to create (only for non-serverless Aurora). Minimum 1 for single-AZ, 2+ for Multi-AZ."
+  type        = number
+  default     = 1
+  validation {
+    condition     = self.value >= 1
+    error_message = "aurora_instance_count must be at least 1"
+  }
 }
 
 # ========================================

@@ -28,3 +28,9 @@ variable "common_tags" {
   description = "Common tags for all resources"
   type        = map(string)
 }
+
+variable "db_port" {
+  description = "Database port for security group rules"
+  type        = number
+  default     = 3306
+}

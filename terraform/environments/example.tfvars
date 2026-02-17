@@ -97,18 +97,44 @@ scheduler_desired_count = 1   # Number of scheduler tasks (typically 1)
 # Database Configuration
 # ========================================
 
+# Database engine selection
+# Options:
+#   - mysql          : MySQL (RDS) - Most compatible, default choice
+#   - mariadb        : MariaDB (RDS) - MySQL fork with additional features
+#   - postgres       : PostgreSQL (RDS) - Advanced features, better for complex queries
+#   - aurora-mysql   : Aurora MySQL - Auto-scaling, better HA, serverless option
+#   - aurora-postgresql : Aurora PostgreSQL - Auto-scaling, better HA, serverless option
+#
+# Aurora benefits: Better high availability, automatic failover, serverless scaling,
+# read replicas with reader endpoint, better performance for read-heavy workloads.
+db_engine = "mysql"
+
+# Database engine version (leave empty for default)
+# Defaults:
+#   - MySQL: 8.0.43
+#   - MariaDB: 10.11.9
+#   - PostgreSQL: 16.4
+#   - Aurora MySQL: 8.0.mysql_aurora.3.07.1
+#   - Aurora PostgreSQL: 16.4
+# Check AWS documentation for available versions
+db_engine_version = ""
+
 # RDS instance type
-# Options: db.t3.micro (free tier), db.t3.small, db.t3.medium, db.t3.large, etc.
+# For RDS: db.t3.micro (free tier), db.t3.small, db.t3.medium, db.t3.large, etc.
+# For Aurora: db.t3.medium (minimum), db.r6g.large, etc., or db.serverless for Serverless v2
+# Note: Aurora Serverless v2 requires db.serverless as instance class
 db_instance_class = "db.t3.small"
 
-# Initial storage allocation in GB
+# Initial storage allocation in GB (RDS only, not applicable for Aurora)
 db_allocated_storage = 20
 
-# Maximum storage for auto-scaling in GB (set to 0 to disable)
+# Maximum storage for auto-scaling in GB (set to 0 to disable, RDS only)
 # Recommended: 100+ for production
 db_max_allocated_storage = 100
 
 # Multi-AZ deployment for high availability (recommended for production)
+# For RDS: Creates a standby replica in another AZ
+# For Aurora: Spreads instances across multiple AZs automatically
 db_multi_az = false
 
 # Enable Performance Insights (requires db.t3.medium or larger)
@@ -118,13 +144,41 @@ enable_performance_insights = false
 enable_deletion_protection = false
 
 # Create a read replica for analytics/reporting queries
+# For RDS: Creates a separate read replica instance
+# For Aurora: Use aurora_instance_count instead (Aurora automatically provides reader endpoint)
 db_create_read_replica = false
 
-# Read replica instance class (defaults to same as primary if empty)
+# Read replica instance class (defaults to same as primary if empty, RDS only)
 db_read_replica_instance_class = ""
 
 # Application database username (created by bastion host)
 app_db_username = "app_user"
+
+# ========================================
+# Aurora-Specific Configuration
+# ========================================
+# Only applicable when db_engine is aurora-mysql or aurora-postgresql
+
+# Enable Aurora Serverless v2 for automatic scaling
+# Benefits: Scales capacity automatically, pay only for what you use, no provisioning
+# Requires: db_instance_class = "db.serverless"
+aurora_enable_serverlessv2 = false
+
+# Minimum Aurora Capacity Units (ACUs) for Serverless v2
+# Range: 0.5 to 128 in 0.5 increments
+# Each ACU provides approximately 2 GB of memory
+# Recommendation: Start with 0.5 for development, 1.0+ for staging, 2.0+ for production
+aurora_min_capacity = 0.5
+
+# Maximum Aurora Capacity Units (ACUs) for Serverless v2
+# Range: 0.5 to 128 in 0.5 increments
+# Recommendation: Set based on peak load (1 ACU for light, 2-4 for moderate, 8+ for heavy)
+aurora_max_capacity = 1.0
+
+# Number of Aurora instances (only for non-serverless Aurora)
+# Minimum: 1 for single-AZ, 2+ for Multi-AZ with read replicas
+# Each additional instance provides read scaling via Aurora reader endpoint
+aurora_instance_count = 1
 
 # ========================================
 # Redis/ElastiCache Configuration
