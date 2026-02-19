@@ -170,14 +170,24 @@ output "redis_port" {
 }
 
 # Messaging
-output "sqs_queue_url" {
-  description = "URL of the main SQS queue"
-  value       = module.messaging.queue_url
+output "sqs_suffix" {
+  description = "SQS queue name suffix"
+  value       = module.messaging.sqs_suffix
 }
 
-output "sqs_queue_arn" {
-  description = "ARN of the main SQS queue"
-  value       = module.messaging.queue_arn
+output "sqs_queue_names_csv" {
+  description = "Comma-separated list of logical queue names"
+  value       = module.messaging.queue_names_csv
+}
+
+output "sqs_queue_urls" {
+  description = "Map of logical queue name to SQS queue URL"
+  value       = module.messaging.queue_urls
+}
+
+output "sqs_queue_arns" {
+  description = "Map of logical queue name to SQS queue ARN"
+  value       = module.messaging.queue_arns
 }
 
 output "sqs_deadletter_queue_url" {

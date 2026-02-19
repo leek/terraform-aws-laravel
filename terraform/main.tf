@@ -121,6 +121,7 @@ module "messaging" {
   environment     = var.environment
   sqs_kms_key_arn = module.security.sqs_kms_key_arn
   common_tags     = local.common_tags
+  queue_names     = var.queue_names
 }
 
 # Security (KMS, IAM) - create KMS keys first
@@ -281,7 +282,8 @@ module "compute" {
   log_group_name             = module.monitoring.log_group_name
   s3_filesystem_bucket_name  = module.storage.app_filesystem_bucket_name
   cloudfront_domain          = var.cloudfront_domain
-  sqs_queue_name             = module.messaging.queue_name
+  sqs_suffix                 = module.messaging.sqs_suffix
+  sqs_queue_names_csv        = module.messaging.queue_names_csv
   caller_identity_account_id = data.aws_caller_identity.current.account_id
 
   # Web service configuration

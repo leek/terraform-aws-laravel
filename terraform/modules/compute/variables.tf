@@ -63,8 +63,13 @@ variable "s3_filesystem_bucket_name" {
   type        = string
 }
 
-variable "sqs_queue_name" {
-  description = "SQS queue name"
+variable "sqs_suffix" {
+  description = "SQS queue name suffix (e.g., -myapp-production)"
+  type        = string
+}
+
+variable "sqs_queue_names_csv" {
+  description = "Comma-separated list of logical queue names for the worker"
   type        = string
 }
 

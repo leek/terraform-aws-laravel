@@ -151,6 +151,13 @@ variable "scheduler_desired_count" {
   default     = 1
 }
 
+# Queue Names
+variable "queue_names" {
+  description = "Logical queue names for SQS. Each becomes a separate SQS queue."
+  type        = list(string)
+  default     = ["default"]
+}
+
 # ========================================
 # Database Configuration
 # ========================================

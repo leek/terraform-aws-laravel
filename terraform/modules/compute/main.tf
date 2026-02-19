@@ -44,11 +44,19 @@ locals {
     },
     {
       name  = "SQS_QUEUE"
-      value = var.sqs_queue_name
+      value = "default"
     },
     {
       name  = "SQS_PREFIX"
       value = "https://sqs.${var.aws_region}.amazonaws.com/${var.caller_identity_account_id}"
+    },
+    {
+      name  = "SQS_SUFFIX"
+      value = var.sqs_suffix
+    },
+    {
+      name  = "QUEUE_NAMES"
+      value = var.sqs_queue_names_csv
     },
     {
       name  = "AWS_BUCKET"

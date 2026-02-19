@@ -1,11 +1,14 @@
 # ========================================
-# SQS Queue for Laravel Jobs
+# SQS Queues for Laravel Jobs
 # ========================================
 
+locals {
+  sqs_suffix = "-${var.app_name}-${var.environment}"
+}
 
-# Dead letter queue for failed jobs
+# Shared dead letter queue for failed jobs
 resource "aws_sqs_queue" "deadletter" {
-  name                              = "${var.app_name}-${var.environment}-deadletter"
+  name                              = "deadletter${local.sqs_suffix}"
   delay_seconds                     = 0
   max_message_size                  = 262144
   message_retention_seconds         = 1209600 # 14 days
@@ -14,13 +17,15 @@ resource "aws_sqs_queue" "deadletter" {
   kms_data_key_reuse_period_seconds = 300
 
   tags = merge(var.common_tags, {
-    Name = "${var.app_name}-${var.environment}-deadletter"
+    Name = "deadletter${local.sqs_suffix}"
   })
 }
 
-# Main application queue
-resource "aws_sqs_queue" "main" {
-  name                              = "${var.app_name}-${var.environment}-queue"
+# Application queues (one per logical queue name)
+resource "aws_sqs_queue" "queues" {
+  for_each = toset(var.queue_names)
+
+  name                              = "${each.key}${local.sqs_suffix}"
   delay_seconds                     = 0
   max_message_size                  = 262144
   message_retention_seconds         = 1209600 # 14 days
@@ -29,13 +34,12 @@ resource "aws_sqs_queue" "main" {
   kms_master_key_id                 = var.sqs_kms_key_arn
   kms_data_key_reuse_period_seconds = 300
 
-  # Dead letter queue configuration
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.deadletter.arn
     maxReceiveCount     = 3
   })
 
   tags = merge(var.common_tags, {
-    Name = "${var.app_name}-${var.environment}-queue"
+    Name = "${each.key}${local.sqs_suffix}"
   })
 }

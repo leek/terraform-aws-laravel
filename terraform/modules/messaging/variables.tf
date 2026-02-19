@@ -18,3 +18,9 @@ variable "sqs_kms_key_arn" {
   description = "ARN of the KMS key for SQS encryption"
   type        = string
 }
+
+variable "queue_names" {
+  description = "Logical queue names. Each becomes an SQS queue named {name}-{app_name}-{environment}."
+  type        = list(string)
+  default     = ["default"]
+}

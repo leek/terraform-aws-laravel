@@ -296,10 +296,7 @@ resource "aws_iam_role_policy" "ecs_task_role_policy" {
           "sqs:GetQueueAttributes",
           "sqs:ChangeMessageVisibility"
         ]
-        Resource = [
-          "arn:aws:sqs:${var.aws_region}:${var.caller_identity_account_id}:${var.app_name}-${var.environment}-queue",
-          "arn:aws:sqs:${var.aws_region}:${var.caller_identity_account_id}:${var.app_name}-${var.environment}-deadletter"
-        ]
+        Resource = "arn:aws:sqs:${var.aws_region}:${var.caller_identity_account_id}:*-${var.app_name}-${var.environment}"
       },
       {
         Effect = "Allow"
@@ -560,10 +557,7 @@ resource "aws_iam_user_policy" "laravel_app_user_policy" {
           "sqs:GetQueueAttributes",
           "sqs:ChangeMessageVisibility"
         ]
-        Resource = [
-          "arn:aws:sqs:${var.aws_region}:${var.caller_identity_account_id}:${var.app_name}-${var.environment}-queue",
-          "arn:aws:sqs:${var.aws_region}:${var.caller_identity_account_id}:${var.app_name}-${var.environment}-deadletter"
-        ]
+        Resource = "arn:aws:sqs:${var.aws_region}:${var.caller_identity_account_id}:*-${var.app_name}-${var.environment}"
       },
       {
         Effect = "Allow"
