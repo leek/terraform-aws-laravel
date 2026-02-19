@@ -106,7 +106,12 @@ locals {
       name  = "PRIVATE_DISK_ROOT"
       value = "private"
     }
-    ], var.additional_environment_variables, var.enable_nightwatch ? [
+    ], var.additional_environment_variables, [
+    {
+      name  = "NIGHTWATCH_ENABLED"
+      value = var.enable_nightwatch ? "true" : "false"
+    }
+    ], var.enable_nightwatch ? [
     {
       name  = "NIGHTWATCH_TOKEN"
       value = local.nightwatch_token

@@ -335,6 +335,17 @@ resource "aws_iam_role_policy" "ecs_task_role_policy" {
           "ses:SendRawEmail"
         ]
         Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream"
+        ]
+        Resource = [
+          "arn:aws:bedrock:${var.aws_region}::foundation-model/anthropic.*",
+          "arn:aws:bedrock:${var.aws_region}::foundation-model/us.anthropic.*"
+        ]
       }
     ]
   })
@@ -588,6 +599,17 @@ resource "aws_iam_user_policy" "laravel_app_user_policy" {
           "ses:SendRawEmail"
         ]
         Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream"
+        ]
+        Resource = [
+          "arn:aws:bedrock:${var.aws_region}::foundation-model/anthropic.*",
+          "arn:aws:bedrock:${var.aws_region}::foundation-model/us.anthropic.*"
+        ]
       }
     ]
   })

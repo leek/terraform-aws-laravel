@@ -111,7 +111,7 @@ db_engine = "mysql"
 
 # Database engine version (leave empty for default)
 # Defaults:
-#   - MySQL: 8.0.43
+#   - MySQL: 8.4.8
 #   - MariaDB: 10.11.9
 #   - PostgreSQL: 16.4
 #   - Aurora MySQL: 8.0.mysql_aurora.3.07.1

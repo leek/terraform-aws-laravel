@@ -292,7 +292,7 @@ resource "aws_s3_bucket_policy" "app_filesystem" {
           Service = "cloudfront.amazonaws.com"
         }
         Action   = "s3:GetObject"
-        Resource = "${aws_s3_bucket.app_filesystem.arn}/*"
+        Resource = "${aws_s3_bucket.app_filesystem.arn}/public/*"
         Condition = {
           StringEquals = {
             "AWS:SourceArn" = aws_cloudfront_distribution.cdn[0].arn

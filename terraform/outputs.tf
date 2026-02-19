@@ -201,6 +201,11 @@ output "cloudtrail_bucket_name" {
   value       = module.storage.cloudtrail_bucket_name
 }
 
+output "app_filesystem_bucket_name" {
+  description = "Name of the app filesystem bucket"
+  value       = module.storage.app_filesystem_bucket_name
+}
+
 # Security
 output "ecs_execution_role_arn" {
   description = "ARN of the ECS execution role"
@@ -265,9 +270,9 @@ output "bastion_ssh_command" {
   value       = var.enable_bastion ? module.bastion[0].ssh_command : "Bastion disabled"
 }
 
-output "mysql_tunnel_command" {
-  description = "MySQL tunnel command via bastion"
-  value       = var.enable_bastion ? "ssh -i ~/.ssh/${var.ec2_key_name}.pem -L 3306:${module.database.rds_endpoint}:3306 ec2-user@${module.bastion[0].public_ip}" : "Bastion disabled - use VPN or direct access"
+output "database_tunnel_command" {
+  description = "Database tunnel command via bastion"
+  value       = var.enable_bastion ? "ssh -i ~/.ssh/${var.ec2_key_name}.pem -L ${module.database.rds_port}:${module.database.rds_endpoint}:${module.database.rds_port} ec2-user@${module.bastion[0].public_ip}" : "Bastion disabled - use VPN or direct access"
 }
 
 output "redis_tunnel_command" {

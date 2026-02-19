@@ -166,7 +166,7 @@ variable "db_engine" {
 }
 
 variable "db_engine_version" {
-  description = "Database engine version. Leave empty to use default version for selected engine. Defaults: MySQL 8.0.43, MariaDB 10.11.9, PostgreSQL 16.4, Aurora MySQL 8.0.mysql_aurora.3.07.1, Aurora PostgreSQL 16.4"
+  description = "Database engine version. Leave empty to use default version for selected engine. Defaults: MySQL 8.4.8, MariaDB 10.11.9, PostgreSQL 16.4, Aurora MySQL 8.0.mysql_aurora.3.07.1, Aurora PostgreSQL 16.4"
   type        = string
   default     = ""
 }
@@ -257,7 +257,7 @@ variable "aurora_instance_count" {
   type        = number
   default     = 1
   validation {
-    condition     = self.value >= 1
+    condition     = var.aurora_instance_count >= 1
     error_message = "aurora_instance_count must be at least 1"
   }
 }
@@ -561,8 +561,8 @@ variable "cloudfront_domain" {
   default     = ""
 
   validation {
-    condition     = var.cloudfront_domain == "" || !can(regex("^https?://", var.cloudfront_domain))
-    error_message = "cloudfront_domain must be a bare domain (no protocol). Example: cdn.example.com"
+    condition     = var.cloudfront_domain == "" || can(regex("^[a-zA-Z0-9][a-zA-Z0-9.-]+[a-zA-Z0-9]$", var.cloudfront_domain))
+    error_message = "cloudfront_domain must be a bare domain (no scheme, path, or trailing slash), e.g. cdn.example.com"
   }
 }
 

@@ -138,7 +138,7 @@ module "security" {
   caller_identity_account_id  = data.aws_caller_identity.current.account_id
 }
 
-# Database (RDS only)
+# Database (RDS / Aurora)
 module "database" {
   source = "./modules/database"
 

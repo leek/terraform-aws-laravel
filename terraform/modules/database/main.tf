@@ -11,9 +11,9 @@ locals {
   engine_config = {
     mysql = {
       engine               = "mysql"
-      engine_version       = var.db_engine_version != "" ? var.db_engine_version : "8.0.43"
-      major_engine_version = "8.0"
-      family               = "mysql8.0"
+      engine_version       = var.db_engine_version != "" ? var.db_engine_version : "8.4.8"
+      major_engine_version = "8.4"
+      family               = "mysql8.4"
       port                 = 3306
     }
     mariadb = {
@@ -89,11 +89,12 @@ module "rds" {
 
   identifier = "${var.app_name}-${var.environment}-db"
 
-  engine                = local.current_engine.engine
-  engine_version        = local.current_engine.engine_version
-  major_engine_version  = local.current_engine.major_engine_version
-  instance_class        = var.db_instance_class
-  allocated_storage     = var.db_allocated_storage
+  engine                       = local.current_engine.engine
+  engine_version               = local.current_engine.engine_version
+  major_engine_version         = local.current_engine.major_engine_version
+  allow_major_version_upgrade  = true
+  instance_class               = var.db_instance_class
+  allocated_storage            = var.db_allocated_storage
   max_allocated_storage = var.db_max_allocated_storage
 
   db_name  = "${var.app_name}_${var.environment}"
@@ -163,10 +164,11 @@ module "rds_read_replica" {
   # Replica-specific settings
   replicate_source_db = module.rds[0].db_instance_identifier
 
-  engine               = local.current_engine.engine
-  engine_version       = local.current_engine.engine_version
-  major_engine_version = local.current_engine.major_engine_version
-  instance_class       = var.read_replica_instance_class != "" ? var.read_replica_instance_class : var.db_instance_class
+  engine                      = local.current_engine.engine
+  engine_version              = local.current_engine.engine_version
+  major_engine_version        = local.current_engine.major_engine_version
+  allow_major_version_upgrade = true
+  instance_class              = var.read_replica_instance_class != "" ? var.read_replica_instance_class : var.db_instance_class
 
   # Storage - inherit autoscaling settings from primary
   max_allocated_storage = var.db_max_allocated_storage
@@ -286,7 +288,7 @@ module "aurora" {
   skip_final_snapshot = var.environment == "production" ? false : true
 
   # Multi-AZ for high availability
-  availability_zones = var.multi_az ? null : [data.aws_availability_zones.available.names[0]]
+  availability_zones = var.multi_az ? null : [data.aws_availability_zones.available[0].names[0]]
 
   apply_immediately = true
 
