@@ -104,7 +104,11 @@ locals {
     },
     {
       name  = "PUBLIC_DISK_URL"
-      value = var.cloudfront_domain != "" ? "https://${var.cloudfront_domain}/public" : "https://${var.s3_filesystem_bucket_name}.s3.${var.aws_region}.amazonaws.com/public"
+      value = var.cloudfront_domain != "" ? "https://${var.cloudfront_domain}" : "https://${var.s3_filesystem_bucket_name}.s3.${var.aws_region}.amazonaws.com"
+    },
+    {
+      name  = "PUBLIC_DISK_SSE"
+      value = "AES256"
     },
     {
       name  = "PRIVATE_DISK_DRIVER"
