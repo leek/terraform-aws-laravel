@@ -178,7 +178,6 @@ RUN cp .env.example .env && \
 # Override CACHE_STORE to avoid database connections during build
 # Set memory_limit for resource-intensive caching operations
 RUN CACHE_STORE=array php -d memory_limit=-1 artisan event:cache --no-interaction --no-ansi && \
-    CACHE_STORE=array php -d memory_limit=-1 artisan route:cache --no-interaction --no-ansi && \
     CACHE_STORE=array php -d memory_limit=-1 artisan view:cache --no-interaction --no-ansi && \
     CACHE_STORE=array php -d memory_limit=-1 artisan icons:cache --no-interaction --no-ansi && \
     CACHE_STORE=array php -d memory_limit=-1 artisan filament:cache-components --no-interaction --no-ansi

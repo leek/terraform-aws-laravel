@@ -42,10 +42,11 @@ chown -R www-data:www-data /var/www/html/bootstrap/cache
 chmod -R 775 /var/www/html/storage
 chmod -R 775 /var/www/html/bootstrap/cache
 
-# Cache only config (all other caches are baked into the Docker image at build time)
-# Config cache must be done at runtime because it depends on environment variables
-echo "Caching Laravel configuration..."
+# Cache config and routes at runtime (both depend on environment variables)
+# Config must be cached first since route:cache reads config values (e.g. APP_KEY for Livewire endpoint hash)
+echo "Caching Laravel configuration and routes..."
 php artisan config:cache --no-interaction || true
+php artisan route:cache --no-interaction || true
 
 # Select the appropriate supervisord config based on container role
 case "$CONTAINER_ROLE" in
