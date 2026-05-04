@@ -28,18 +28,46 @@ EMOJI_staging := 🚧
 EMOJI_uat := 🧪
 EMOJI_production := 🏭
 
-# Database sync (used by db.%.tunnel, db.%.push, db.%.pull)
-# Override these in Makefile.config for non-default Postgres setups.
+# Database sync (used by db.%.tunnel, db.%.push, db.%.pull).
+# Engine is auto-detected from local .env DB_CONNECTION; override DB_SYNC_ENGINE
+# in Makefile.config to force a specific flavor (postgres, pgsql, mysql, mariadb).
+DB_SYNC_LOCAL_ENGINE := $(shell grep -E '^DB_CONNECTION=' .env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
+DB_SYNC_ENGINE ?= $(if $(DB_SYNC_LOCAL_ENGINE),$(DB_SYNC_LOCAL_ENGINE),postgres)
+
+# Local TCP port used when tunneling to remote DB; non-conflicting with local DB.
 DB_SYNC_PORT := 54320
-DB_SYNC_REMOTE_PORT := 5432
 DB_SYNC_EXCLUDE_TABLES := cache cache_locks jobs job_batches failed_jobs
-DB_SYNC_POSTGRES_BIN := /opt/homebrew/opt/postgresql@16/bin
-DB_SYNC_PG_DUMP := $(DB_SYNC_POSTGRES_BIN)/pg_dump
+
+# pg_dump auto-detected via PATH; falls back to common Homebrew install paths.
+# Override DB_SYNC_PG_DUMP in Makefile.config to pin a specific binary.
+DB_SYNC_PG_DUMP ?= $(shell command -v pg_dump 2>/dev/null || \
+	for d in /opt/homebrew/opt/postgresql@18/bin /opt/homebrew/opt/postgresql@16/bin /usr/local/opt/postgresql@16/bin /usr/lib/postgresql/16/bin; do \
+		[ -x "$$d/pg_dump" ] && echo "$$d/pg_dump" && break; \
+	done)
+
+# mysqldump / mysql auto-detected via PATH; fall back to common Homebrew paths.
+DB_SYNC_MYSQLDUMP ?= $(shell command -v mysqldump 2>/dev/null || \
+	for d in /opt/homebrew/opt/mysql-client/bin /usr/local/opt/mysql-client/bin /opt/homebrew/opt/mysql/bin; do \
+		[ -x "$$d/mysqldump" ] && echo "$$d/mysqldump" && break; \
+	done)
+DB_SYNC_MYSQL ?= $(shell command -v mysql 2>/dev/null || \
+	for d in /opt/homebrew/opt/mysql-client/bin /usr/local/opt/mysql-client/bin /opt/homebrew/opt/mysql/bin; do \
+		[ -x "$$d/mysql" ] && echo "$$d/mysql" && break; \
+	done)
 
 # When true, db.%.push publishes the local APP_KEY to /<APP_NAME>/<env>/APP_PREVIOUS_KEYS
 # so encrypted columns from the local snapshot remain decryptable on the remote.
 # Requires application support for APP_PREVIOUS_KEYS-style key rotation.
 DB_SYNC_PUBLISH_APP_PREVIOUS_KEYS := false
+
+# Engine-specific port + dispatch resolution.
+ifeq ($(filter $(DB_SYNC_ENGINE),mysql mariadb),)
+DB_SYNC_FLAVOR := pg
+DB_SYNC_REMOTE_PORT := 5432
+else
+DB_SYNC_FLAVOR := mysql
+DB_SYNC_REMOTE_PORT := 3306
+endif
 
 # Load optional local config (overrides above variables)
 -include Makefile.config
@@ -59,6 +87,9 @@ dotenv = $(shell grep -E '^$(1)=' .env 2>/dev/null | head -1 | cut -d= -f2- | tr
 
 # Build pg_dump --exclude-table-data flags from DB_SYNC_EXCLUDE_TABLES
 db_exclude_tables = $(foreach tbl,$(DB_SYNC_EXCLUDE_TABLES),--exclude-table-data=$(tbl))
+
+# Build mysqldump --ignore-table=<db>.<tbl> flags. Caller must pass the database name.
+mysql_exclude_tables = $(foreach tbl,$(DB_SYNC_EXCLUDE_TABLES),--ignore-table=$(1).$(tbl))
 
 # Terraform with AWS profile, region, and directory.
 # Set USE_AWS_CREDS_EXPORT=true in Makefile.config to export credentials via the
@@ -454,22 +485,24 @@ bastion.%.ssh:
 	ssh -i $(SSH_KEY) ec2-user@$$BASTION_IP
 
 # ========================================
-# Database Sync Targets (PostgreSQL)
+# Database Sync Targets
 # ========================================
 #
-# These targets shell out via the bastion host. PostgreSQL-only — adapt
-# accordingly for MySQL/MariaDB engines.
+# Engine is auto-detected from local .env DB_CONNECTION (or override
+# DB_SYNC_ENGINE in Makefile.config). Supported: postgres, pgsql, mysql, mariadb.
+# All targets shell out via the bastion host.
 #
 # Required setup:
 #   - var.enable_bastion = true with an SSH key on disk at $(SSH_KEY)
-#   - pg_dump on the local machine at $(DB_SYNC_PG_DUMP)
+#   - For Postgres: pg_dump on the local machine ($(DB_SYNC_PG_DUMP))
+#   - For MySQL/MariaDB: mysqldump + mysql clients ($(DB_SYNC_MYSQLDUMP), $(DB_SYNC_MYSQL))
 #   - jq on PATH
 
-# PostgreSQL tunnel on a non-conflicting port (DB_SYNC_PORT, default 54320)
-# so it can run alongside a local Postgres on 5432.
+# Tunnel to remote DB on a non-conflicting local port (DB_SYNC_PORT, default
+# 54320) so it can run alongside a local DB on the engine's standard port.
 .PHONY: db.%.tunnel
 db.%.tunnel:
-	@echo "🔗 Opening database tunnel to $* on port $(DB_SYNC_PORT)..."
+	@echo "🔗 Opening $(DB_SYNC_FLAVOR) tunnel to $* on port $(DB_SYNC_PORT)..."
 	@$(tf) workspace select $* 2>/dev/null || $(tf) workspace new $* 2>/dev/null || true && \
 	BASTION_IP=$$($(tf) output -raw bastion_public_ip 2>/dev/null) && \
 	RDS_ENDPOINT=$$($(tf) output -raw rds_endpoint 2>/dev/null) && \
@@ -480,17 +513,39 @@ db.%.tunnel:
 	echo "📋 Tunneling localhost:$(DB_SYNC_PORT) -> $$RDS_ENDPOINT:$(DB_SYNC_REMOTE_PORT) via $$BASTION_IP" && \
 	ssh -i $(SSH_KEY) -N -L $(DB_SYNC_PORT):$$RDS_ENDPOINT:$(DB_SYNC_REMOTE_PORT) ec2-user@$$BASTION_IP
 
-# Push local Postgres database to remote (DESTRUCTIVE — overwrites remote).
-# Requires interactive confirmation. Brackets in maintenance mode + EXIT trap.
+# Engine-dispatching push target. Routes to _db.<flavor>.%.push.
 .PHONY: db.%.push
 db.%.push:
+	@case "$(DB_SYNC_FLAVOR)" in \
+		pg) $(MAKE) _db.pg.$*.push ;; \
+		mysql) $(MAKE) _db.mysql.$*.push ;; \
+		*) echo "❌ ERROR: Unknown DB_SYNC_FLAVOR=$(DB_SYNC_FLAVOR) (engine=$(DB_SYNC_ENGINE))"; exit 1 ;; \
+	esac
+
+# Engine-dispatching pull target. Routes to _db.<flavor>.%.pull.
+.PHONY: db.%.pull
+db.%.pull:
+	@case "$(DB_SYNC_FLAVOR)" in \
+		pg) $(MAKE) _db.pg.$*.pull ;; \
+		mysql) $(MAKE) _db.mysql.$*.pull ;; \
+		*) echo "❌ ERROR: Unknown DB_SYNC_FLAVOR=$(DB_SYNC_FLAVOR) (engine=$(DB_SYNC_ENGINE))"; exit 1 ;; \
+	esac
+
+# ----------------------------------------------------------------------------
+# PostgreSQL implementations
+# ----------------------------------------------------------------------------
+
+# Push local Postgres database to remote (DESTRUCTIVE — overwrites remote).
+# Requires interactive confirmation. Brackets in maintenance mode + EXIT trap.
+.PHONY: _db.pg.%.push
+_db.pg.%.push:
 	@set -o pipefail && \
 	if ! command -v jq >/dev/null 2>&1; then \
 		echo "❌ ERROR: jq is required. Install with: brew install jq"; \
 		exit 1; \
 	fi && \
-	if [ ! -x "$(DB_SYNC_PG_DUMP)" ]; then \
-		echo "❌ ERROR: pg_dump is required at $(DB_SYNC_PG_DUMP). Set DB_SYNC_PG_DUMP in Makefile.config to override."; \
+	if [ -z "$(DB_SYNC_PG_DUMP)" ] || [ ! -x "$(DB_SYNC_PG_DUMP)" ]; then \
+		echo "❌ ERROR: pg_dump not found. Set DB_SYNC_PG_DUMP in Makefile.config."; \
 		exit 1; \
 	fi && \
 	echo "⚠️  WARNING: You are about to OVERWRITE the $* remote database with your LOCAL data." && \
@@ -588,22 +643,9 @@ db.%.push:
 		echo "ℹ️  Run 'make db.$*.push.clear-previous-keys' after you've re-encrypted or no longer need the old key."; \
 	fi
 
-# Reset APP_PREVIOUS_KEYS on remote to a sentinel and redeploy.
-.PHONY: db.%.push.clear-previous-keys
-db.%.push.clear-previous-keys:
-	@echo "🧹 Clearing APP_PREVIOUS_KEYS on $*..."
-	@$(aws) ssm put-parameter \
-		--name "/$(APP_NAME)/$*/APP_PREVIOUS_KEYS" \
-		--value "0" \
-		--type SecureString \
-		--overwrite >/dev/null
-	@$(MAKE) aws.$*.redeploy
-	@echo "✅ APP_PREVIOUS_KEYS cleared on $*"
-
 # Pull remote Postgres database to local (DESTRUCTIVE — overwrites local).
-# Production requires interactive confirmation.
-.PHONY: db.%.pull
-db.%.pull:
+.PHONY: _db.pg.%.pull
+_db.pg.%.pull:
 	@command -v jq >/dev/null 2>&1 || { echo "❌ ERROR: jq is required. Install with: brew install jq"; exit 1; } && \
 	if [ "$*" = "production" ]; then \
 		echo "⚠️  WARNING: You are about to OVERWRITE your local database with PRODUCTION data."; \
@@ -647,6 +689,159 @@ db.%.pull:
 	PGPASSWORD=$(call dotenv,DB_PASSWORD) psql -h $(call dotenv,DB_HOST) -p $(call dotenv,DB_PORT) \
 		-U $(call dotenv,DB_USERNAME) \
 		-d $(call dotenv,DB_DATABASE) -v ON_ERROR_STOP=1 && \
+	echo "✅ Pull from $* complete!"
+
+# Reset APP_PREVIOUS_KEYS on remote to a sentinel and redeploy.
+.PHONY: db.%.push.clear-previous-keys
+db.%.push.clear-previous-keys:
+	@echo "🧹 Clearing APP_PREVIOUS_KEYS on $*..."
+	@$(aws) ssm put-parameter \
+		--name "/$(APP_NAME)/$*/APP_PREVIOUS_KEYS" \
+		--value "0" \
+		--type SecureString \
+		--overwrite >/dev/null
+	@$(MAKE) aws.$*.redeploy
+	@echo "✅ APP_PREVIOUS_KEYS cleared on $*"
+
+# ----------------------------------------------------------------------------
+# MySQL / MariaDB implementations
+# ----------------------------------------------------------------------------
+#
+# MySQL doesn't need PG's role-switch dance: the existing app GRANTs survive
+# table-level drop/recreate, so --add-drop-table preserves permissions.
+
+# Push local MySQL/MariaDB database to remote (DESTRUCTIVE — overwrites remote).
+.PHONY: _db.mysql.%.push
+_db.mysql.%.push:
+	@set -o pipefail && \
+	if ! command -v jq >/dev/null 2>&1; then \
+		echo "❌ ERROR: jq is required. Install with: brew install jq"; \
+		exit 1; \
+	fi && \
+	if [ -z "$(DB_SYNC_MYSQLDUMP)" ] || [ ! -x "$(DB_SYNC_MYSQLDUMP)" ]; then \
+		echo "❌ ERROR: mysqldump not found. Install mysql-client or set DB_SYNC_MYSQLDUMP in Makefile.config."; \
+		exit 1; \
+	fi && \
+	echo "⚠️  WARNING: You are about to OVERWRITE the $* remote database with your LOCAL data." && \
+	printf "Type 'yes-push-$*' to confirm: " && \
+	read CONFIRM && \
+	if [ "$$CONFIRM" != "yes-push-$*" ]; then \
+		echo "❌ Aborted."; \
+		exit 1; \
+	fi && \
+	echo "⬆️  Pushing local MySQL database to $*..." && \
+	$(tf) workspace select $* 2>/dev/null || $(tf) workspace new $* 2>/dev/null || true && \
+	BASTION_IP=$$($(tf) output -raw bastion_public_ip 2>/dev/null) && \
+	RDS_ENDPOINT=$$($(tf) output -raw rds_endpoint 2>/dev/null) && \
+	RDS_DB_NAME=$$($(tf) output -raw rds_database_name 2>/dev/null) && \
+	RDS_SECRET_ARN=$$($(tf) output -raw rds_secret_arn 2>/dev/null) && \
+	if [ -z "$$BASTION_IP" ] || echo "$$BASTION_IP" | grep -q "Bastion disabled"; then \
+		echo "❌ ERROR: Bastion host not enabled in $*"; \
+		exit 1; \
+	fi && \
+	echo "🔑 Retrieving RDS credentials..." && \
+	SECRET_JSON=$$($(aws) secretsmanager get-secret-value \
+		--secret-id "$$RDS_SECRET_ARN" \
+		--query 'SecretString' \
+		--output text 2>/dev/null) && \
+	if [ -z "$$SECRET_JSON" ]; then \
+		echo "❌ ERROR: Failed to retrieve RDS secret"; \
+		exit 1; \
+	fi && \
+	RDS_USER=$$(echo "$$SECRET_JSON" | jq -r '.username') && \
+	RDS_PASS=$$(echo "$$SECRET_JSON" | jq -r '.password') && \
+	if [ -z "$$RDS_USER" ] || [ "$$RDS_USER" = "null" ]; then \
+		echo "❌ ERROR: Failed to parse credentials from secret"; \
+		exit 1; \
+	fi && \
+	MAINTENANCE_ENABLED=0 && \
+	trap 'if [ "$$MAINTENANCE_ENABLED" = "1" ]; then echo "🔧 Bringing $* back online after failure..."; $(MAKE) aws.$*.artisan CMD="php artisan up"; fi' EXIT && \
+	echo "🔧 Putting $* in maintenance mode..." && \
+	$(MAKE) aws.$*.artisan CMD="php artisan down" && \
+	MAINTENANCE_ENABLED=1 && \
+	echo "📦 Dumping local database $(call dotenv,DB_DATABASE) and importing into $$RDS_DB_NAME via bastion..." && \
+	MYSQL_PWD=$(call dotenv,DB_PASSWORD) "$(DB_SYNC_MYSQLDUMP)" \
+		-h $(call dotenv,DB_HOST) -P $(call dotenv,DB_PORT) \
+		-u $(call dotenv,DB_USERNAME) \
+		--no-tablespaces --single-transaction --quick --routines --triggers \
+		--no-create-db --add-drop-table \
+		--set-gtid-purged=OFF \
+		$(call mysql_exclude_tables,$(call dotenv,DB_DATABASE)) \
+		$(call dotenv,DB_DATABASE) | \
+	ssh -i $(SSH_KEY) -o ConnectTimeout=10 ec2-user@$$BASTION_IP \
+		"MYSQL_PWD='$$RDS_PASS' mysql -h $$RDS_ENDPOINT -u '$$RDS_USER' '$$RDS_DB_NAME'" && \
+	if [ "$(DB_SYNC_PUBLISH_APP_PREVIOUS_KEYS)" = "true" ]; then \
+		echo "🔐 Publishing local APP_KEY as APP_PREVIOUS_KEYS on $* so encrypted columns remain decryptable..."; \
+		LOCAL_APP_KEY="$(call dotenv,APP_KEY)"; \
+		if [ -z "$$LOCAL_APP_KEY" ]; then \
+			echo "❌ ERROR: Local APP_KEY not found in .env — cannot publish APP_PREVIOUS_KEYS"; \
+			exit 1; \
+		fi; \
+		$(aws) ssm put-parameter \
+			--name "/$(APP_NAME)/$*/APP_PREVIOUS_KEYS" \
+			--value "$$LOCAL_APP_KEY" \
+			--type SecureString \
+			--overwrite >/dev/null; \
+		$(MAKE) aws.$*.redeploy; \
+	fi && \
+	echo "🔧 Bringing $* back online..." && \
+	$(MAKE) aws.$*.artisan CMD="php artisan up" && \
+	MAINTENANCE_ENABLED=0 && \
+	trap - EXIT && \
+	echo "✅ Push to $* complete!"
+
+# Pull remote MySQL/MariaDB database to local (DESTRUCTIVE — overwrites local).
+.PHONY: _db.mysql.%.pull
+_db.mysql.%.pull:
+	@command -v jq >/dev/null 2>&1 || { echo "❌ ERROR: jq is required. Install with: brew install jq"; exit 1; } && \
+	if [ -z "$(DB_SYNC_MYSQL)" ] || [ ! -x "$(DB_SYNC_MYSQL)" ]; then \
+		echo "❌ ERROR: mysql client not found. Install mysql-client or set DB_SYNC_MYSQL in Makefile.config."; \
+		exit 1; \
+	fi && \
+	if [ "$*" = "production" ]; then \
+		echo "⚠️  WARNING: You are about to OVERWRITE your local database with PRODUCTION data."; \
+		printf "Type 'yes-pull-production' to confirm: "; \
+		read CONFIRM; \
+		if [ "$$CONFIRM" != "yes-pull-production" ]; then \
+			echo "❌ Aborted."; \
+			exit 1; \
+		fi; \
+	fi && \
+	echo "⬇️  Pulling $* MySQL database to local..." && \
+	$(tf) workspace select $* 2>/dev/null || $(tf) workspace new $* 2>/dev/null || true && \
+	BASTION_IP=$$($(tf) output -raw bastion_public_ip 2>/dev/null) && \
+	RDS_ENDPOINT=$$($(tf) output -raw rds_endpoint 2>/dev/null) && \
+	RDS_DB_NAME=$$($(tf) output -raw rds_database_name 2>/dev/null) && \
+	RDS_SECRET_ARN=$$($(tf) output -raw rds_secret_arn 2>/dev/null) && \
+	if [ -z "$$BASTION_IP" ] || echo "$$BASTION_IP" | grep -q "Bastion disabled"; then \
+		echo "❌ ERROR: Bastion host not enabled in $*"; \
+		exit 1; \
+	fi && \
+	echo "🔑 Retrieving RDS credentials..." && \
+	SECRET_JSON=$$($(aws) secretsmanager get-secret-value \
+		--secret-id "$$RDS_SECRET_ARN" \
+		--query 'SecretString' \
+		--output text 2>/dev/null) && \
+	if [ -z "$$SECRET_JSON" ]; then \
+		echo "❌ ERROR: Failed to retrieve RDS secret"; \
+		exit 1; \
+	fi && \
+	RDS_USER=$$(echo "$$SECRET_JSON" | jq -r '.username') && \
+	RDS_PASS=$$(echo "$$SECRET_JSON" | jq -r '.password') && \
+	if [ -z "$$RDS_USER" ] || [ "$$RDS_USER" = "null" ]; then \
+		echo "❌ ERROR: Failed to parse credentials from secret"; \
+		exit 1; \
+	fi && \
+	echo "📥 Dumping remote database $$RDS_DB_NAME via bastion and importing locally..." && \
+	ssh -i $(SSH_KEY) -o ConnectTimeout=10 ec2-user@$$BASTION_IP \
+		"MYSQL_PWD='$$RDS_PASS' mysqldump -h $$RDS_ENDPOINT -u '$$RDS_USER' \
+		--no-tablespaces --single-transaction --quick --routines --triggers \
+		--no-create-db --add-drop-table --set-gtid-purged=OFF \
+		'$$RDS_DB_NAME'" | \
+	MYSQL_PWD=$(call dotenv,DB_PASSWORD) "$(DB_SYNC_MYSQL)" \
+		-h $(call dotenv,DB_HOST) -P $(call dotenv,DB_PORT) \
+		-u $(call dotenv,DB_USERNAME) \
+		$(call dotenv,DB_DATABASE) && \
 	echo "✅ Pull from $* complete!"
 
 # ========================================
@@ -723,7 +918,7 @@ help:
 	@echo "  make bastion.<env>.tunnel.db           - Database tunnel via bastion"
 	@echo "  make bastion.<env>.tunnel.redis        - Redis tunnel via bastion"
 	@echo ""
-	@echo "Database (Postgres-only):"
+	@echo "Database (engine auto-detected from .env DB_CONNECTION):"
 	@echo "  make db.<env>.tunnel                   - Tunnel to RDS on DB_SYNC_PORT (54320)"
 	@echo "  make db.<env>.push                     - Overwrite remote DB with local (interactive confirmation)"
 	@echo "  make db.<env>.pull                     - Overwrite local DB with remote"

@@ -26,11 +26,15 @@ INSTALL_IMAGICK := false
 ECS_SERVICES := service queue-worker scheduler
 ENVIRONMENTS := staging uat production
 
-# Database sync (used by db.%.tunnel, db.%.push, db.%.pull). Postgres-only.
+# Database sync (used by db.%.tunnel, db.%.push, db.%.pull).
+# Engine is auto-detected from local .env DB_CONNECTION; force a flavor here:
+# DB_SYNC_ENGINE := postgres   # or pgsql, mysql, mariadb
 # DB_SYNC_PORT := 54320
-# DB_SYNC_REMOTE_PORT := 5432
 # DB_SYNC_EXCLUDE_TABLES := cache cache_locks jobs job_batches failed_jobs
+# Auto-detected via PATH; override to pin a specific binary.
 # DB_SYNC_PG_DUMP := /opt/homebrew/opt/postgresql@16/bin/pg_dump
+# DB_SYNC_MYSQLDUMP := /opt/homebrew/opt/mysql-client/bin/mysqldump
+# DB_SYNC_MYSQL := /opt/homebrew/opt/mysql-client/bin/mysql
 # DB_SYNC_PUBLISH_APP_PREVIOUS_KEYS := false
 
 # Set true for SSO / role-chained AWS profiles where the Go SDK and the AWS CLI

@@ -215,6 +215,29 @@ redis_node_type = "cache.t3.micro"
 # Production: 10.1.0.0/16
 vpc_cidr = "10.0.0.0/16"
 
+# Single NAT gateway shared by all private subnets. Set false to provision one
+# NAT per AZ (higher cost, no cross-AZ data charge for outbound traffic).
+single_nat_gateway = true
+
+# VPC interface endpoints for private AWS service access (avoids NAT egress).
+# Note: each interface endpoint costs ~$7/mo per AZ.
+enable_vpc_interface_endpoints  = true
+enabled_vpc_interface_endpoints = ["ssm", "ssmmessages", "ec2messages", "ecr.api", "ecr.dkr", "logs", "sqs"]
+
+# Additional ingress allowed to RDS/Aurora. Each entry takes a description
+# recorded on the security group rule for auditing.
+#
+# rds_additional_ingress_cidrs = [
+#   { cidr = "203.0.113.0/24", description = "Office VPN" },
+#   { cidr = "198.51.100.10/32", description = "Analytics ETL host" },
+# ]
+#
+# rds_additional_ingress_security_group_ids = [
+#   { security_group_id = "sg-0123456789abcdef0", description = "Lambda data exporter" },
+# ]
+rds_additional_ingress_cidrs              = []
+rds_additional_ingress_security_group_ids = []
+
 # ========================================
 # OPTIONAL: Bastion Host Configuration
 # ========================================
