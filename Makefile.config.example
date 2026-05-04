@@ -11,6 +11,7 @@ DOCKER_FILE := docker/Dockerfile
 SSH_KEY := ~/.ssh/$(APP_NAME)-bastion-key.pem
 DOCKER_PLATFORM := linux/amd64
 APP_SERVER_MODE := php-fpm
+INSTALL_MYSQL := true
 INSTALL_PGSQL := true
 INSTALL_CHROMIUM := false
 INSTALL_GNUPG := false

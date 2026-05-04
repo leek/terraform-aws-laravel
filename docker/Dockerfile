@@ -5,6 +5,7 @@
 # ========================================
 ARG COMPOSER_IMAGE=composer:2
 ARG APP_SERVER_MODE=php-fpm
+ARG INSTALL_MYSQL=true
 ARG INSTALL_PGSQL=true
 ARG INSTALL_CHROMIUM=false
 ARG INSTALL_GNUPG=false
@@ -66,6 +67,7 @@ RUN set -o pipefail && \
 FROM php:8.4-fpm-alpine AS base
 
 ARG APP_SERVER_MODE
+ARG INSTALL_MYSQL
 ARG INSTALL_PGSQL
 ARG INSTALL_CHROMIUM
 ARG INSTALL_GNUPG
@@ -97,9 +99,9 @@ RUN apk update && apk upgrade --no-cache && \
     # Runtime deps for the final image
     nginx \
     supervisor \
-    mysql-client \
     openssh-client \
     nano && \
+    if [ "$INSTALL_MYSQL" = "true" ]; then apk add --no-cache mysql-client; fi && \
     if [ "$INSTALL_PGSQL" = "true" ]; then apk add --no-cache postgresql-dev postgresql-client; fi && \
     if [ "$INSTALL_CHROMIUM" = "true" ]; then apk add --no-cache chromium nss harfbuzz ttf-freefont font-noto-emoji; fi && \
     if [ "$INSTALL_GNUPG" = "true" ]; then apk add --no-cache gnupg; fi
@@ -108,7 +110,6 @@ RUN apk update && apk upgrade --no-cache && \
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) \
     pdo \
-    pdo_mysql \
     gd \
     mbstring \
     intl \
@@ -118,7 +119,8 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     pcntl \
     sockets \
     soap \
-    # PostgreSQL - only when INSTALL_PGSQL=true
+    # Database drivers are optional so projects can ship lean single-engine images
+    && if [ "$INSTALL_MYSQL" = "true" ]; then docker-php-ext-install pdo_mysql; fi \
     && if [ "$INSTALL_PGSQL" = "true" ]; then docker-php-ext-install pdo_pgsql; fi \
     # PECL - redis is always installed
     && pecl install redis \

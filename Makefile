@@ -91,6 +91,7 @@ terraform.production.apply:
 
 # Docker build arguments (override via Makefile.config or CLI)
 APP_SERVER_MODE := php-fpm
+INSTALL_MYSQL := true
 INSTALL_PGSQL := true
 INSTALL_CHROMIUM := false
 INSTALL_GNUPG := false
@@ -113,6 +114,7 @@ docker.%.build:
 	@echo "🛠️  Building Docker image for $(call emoji,$*) $* ($(DOCKER_PLATFORM)) tag=$(IMAGE_TAG)..."
 	@docker buildx build --platform $(DOCKER_PLATFORM) -f $(DOCKER_FILE) \
 		--build-arg APP_SERVER_MODE=$(APP_SERVER_MODE) \
+		--build-arg INSTALL_MYSQL=$(INSTALL_MYSQL) \
 		--build-arg INSTALL_PGSQL=$(INSTALL_PGSQL) \
 		--build-arg INSTALL_CHROMIUM=$(INSTALL_CHROMIUM) \
 		--build-arg INSTALL_GNUPG=$(INSTALL_GNUPG) \

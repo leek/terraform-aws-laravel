@@ -395,7 +395,7 @@ It also injects the matching Laravel driver into ECS:
 - MySQL/MariaDB/Aurora MySQL: `DB_CONNECTION=mysql`
 - PostgreSQL/Aurora PostgreSQL: `DB_CONNECTION=pgsql`
 
-The Docker build includes both `pdo_mysql` and `pdo_pgsql` by default so the same template supports either database engine. Set `INSTALL_PGSQL=false` only when you know a project will stay MySQL/MariaDB-only and want the smaller image.
+The Docker build includes both `pdo_mysql` and `pdo_pgsql` by default so the same template supports either database engine. Set `INSTALL_MYSQL=false` for PostgreSQL-only images or `INSTALL_PGSQL=false` for MySQL/MariaDB-only images.
 
 #### Migration Considerations
 
