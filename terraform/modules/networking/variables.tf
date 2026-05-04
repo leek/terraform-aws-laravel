@@ -54,13 +54,19 @@ variable "enabled_vpc_interface_endpoints" {
 }
 
 variable "rds_additional_ingress_cidrs" {
-  description = "Additional CIDR blocks allowed to connect to RDS/Aurora"
-  type        = list(string)
-  default     = []
+  description = "Additional CIDR blocks allowed to connect to RDS/Aurora. Each entry takes a description for security group rule auditing."
+  type = list(object({
+    cidr        = string
+    description = string
+  }))
+  default = []
 }
 
 variable "rds_additional_ingress_security_group_ids" {
-  description = "Additional security group IDs allowed to connect to RDS/Aurora"
-  type        = list(string)
-  default     = []
+  description = "Additional security group IDs allowed to connect to RDS/Aurora. Each entry takes a description for security group rule auditing."
+  type = list(object({
+    security_group_id = string
+    description       = string
+  }))
+  default = []
 }

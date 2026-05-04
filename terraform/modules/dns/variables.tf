@@ -38,3 +38,21 @@ variable "dmarc_record" {
   type        = string
   default     = ""
 }
+
+variable "cloudfront_app_enabled" {
+  description = "Point apex/www/wildcard records at the app CloudFront distribution instead of the ALB"
+  type        = bool
+  default     = false
+}
+
+variable "cloudfront_app_domain_name" {
+  description = "App CloudFront distribution domain name (used when cloudfront_app_enabled = true)"
+  type        = string
+  default     = ""
+}
+
+variable "cloudfront_app_hosted_zone_id" {
+  description = "App CloudFront hosted zone ID (always Z2FDTNDATAQYW2 for CloudFront aliases)"
+  type        = string
+  default     = ""
+}

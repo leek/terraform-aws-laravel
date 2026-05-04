@@ -3,12 +3,15 @@
 # ========================================
 # Build Arguments
 # ========================================
-ARG COMPOSER_IMAGE=composer:2
+# Composer image is pinned by digest for reproducible builds. Override via build-arg
+# to bump versions deliberately rather than tracking the floating composer:2 tag.
+ARG COMPOSER_IMAGE=composer:2.9.7@sha256:dc292c5c0f95f526b051d4c341bf08e7e2b18504c74625e3203d7f123050e318
 ARG APP_SERVER_MODE=php-fpm
 ARG INSTALL_MYSQL=true
 ARG INSTALL_PGSQL=true
 ARG INSTALL_CHROMIUM=false
 ARG INSTALL_GNUPG=false
+ARG INSTALL_IMAGICK=false
 
 # ========================================
 # Stage: Composer binary
@@ -71,6 +74,7 @@ ARG INSTALL_MYSQL
 ARG INSTALL_PGSQL
 ARG INSTALL_CHROMIUM
 ARG INSTALL_GNUPG
+ARG INSTALL_IMAGICK
 
 # Install system dependencies (merged apk update + upgrade + add into one layer)
 RUN apk update && apk upgrade --no-cache && \
@@ -104,7 +108,17 @@ RUN apk update && apk upgrade --no-cache && \
     if [ "$INSTALL_MYSQL" = "true" ]; then apk add --no-cache mysql-client; fi && \
     if [ "$INSTALL_PGSQL" = "true" ]; then apk add --no-cache postgresql-dev postgresql-client; fi && \
     if [ "$INSTALL_CHROMIUM" = "true" ]; then apk add --no-cache chromium nss harfbuzz ttf-freefont font-noto-emoji; fi && \
-    if [ "$INSTALL_GNUPG" = "true" ]; then apk add --no-cache gnupg; fi
+    if [ "$INSTALL_GNUPG" = "true" ]; then apk add --no-cache gnupg; fi && \
+    if [ "$INSTALL_IMAGICK" = "true" ]; then apk add --no-cache imagemagick imagemagick-dev; fi
+
+# When INSTALL_CHROMIUM=true, point Browsershot/Puppeteer at the system chromium
+# binary so Puppeteer doesn't try to download its own (which fails inside
+# containers). HOME is moved to /var/www/html because Puppeteer's cosmiconfig
+# walks up from $HOME looking for config and can't traverse into /root when
+# running as the www-data user.
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser \
+    HOME=/var/www/html
 
 # Install PHP extensions
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
@@ -128,6 +142,10 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     # APCu backs Composer's APCu autoloader cache
     && pecl install apcu \
     && docker-php-ext-enable apcu \
+    # Imagick - optional, gated by INSTALL_IMAGICK
+    && if [ "$INSTALL_IMAGICK" = "true" ]; then \
+        pecl install imagick && docker-php-ext-enable imagick; \
+    fi \
     # Swoole - only when using octane-swoole
     && if [ "$APP_SERVER_MODE" = "octane-swoole" ]; then \
         pecl install swoole && docker-php-ext-enable swoole; \
@@ -154,7 +172,9 @@ FROM base AS builder
 # Set working directory
 WORKDIR /var/www/html
 
-# Install additional build-time dependencies
+# Install additional build-time dependencies. build-base/autoconf/automake/libtool
+# are reinstalled here because the base stage removes them after PHP extensions are
+# built, but they're needed again to compile native node addons (e.g. gifsicle).
 RUN apk add --no-cache \
     curl \
     unzip \
@@ -192,6 +212,9 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY . .
 
 # Regenerate the optimized autoloader after app/ source is present.
+# --no-scripts skips Filament's post-autoload-dump event, which expects the full
+# app to be hydrated and conflicts with build ordering here. The runtime cache
+# warmups below pick up the missing work.
 RUN composer dump-autoload --optimize --classmap-authoritative --apcu --no-scripts --no-interaction
 
 # Create minimal .env for build-time caching (will be replaced at runtime)

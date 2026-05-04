@@ -25,9 +25,9 @@ variable "redis_node_type" {
 }
 
 variable "redis_num_cache_clusters" {
-  description = "Number of cache clusters in the replication group. 2+ enables automatic failover and Multi-AZ."
+  description = "Number of cache clusters in the replication group. 2+ enables automatic failover and Multi-AZ (default)."
   type        = number
-  default     = 1
+  default     = 2
 
   validation {
     condition     = var.redis_num_cache_clusters >= 1

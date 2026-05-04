@@ -15,8 +15,25 @@ INSTALL_MYSQL := true
 INSTALL_PGSQL := true
 INSTALL_CHROMIUM := false
 INSTALL_GNUPG := false
-COMPOSER_IMAGE := composer:2
-MIGRATE_CMD := php artisan migrate --force --isolated
+INSTALL_IMAGICK := false
+# Pin Composer image by digest for reproducibility. The Makefile/Dockerfile
+# default already pins; override here to bump versions.
+# COMPOSER_IMAGE := composer:2.9.7@sha256:dc292c5c0f95f526b051d4c341bf08e7e2b18504c74625e3203d7f123050e318
+# Migrations are bracketed by `php artisan down` / `up` by default. Override
+# to use isolated-only or a release-flow-aware command.
+# MIGRATE_CMD := php artisan migrate --force --isolated
 # IMAGE_TAG := custom-tag
 ECS_SERVICES := service queue-worker scheduler
 ENVIRONMENTS := staging uat production
+
+# Database sync (used by db.%.tunnel, db.%.push, db.%.pull). Postgres-only.
+# DB_SYNC_PORT := 54320
+# DB_SYNC_REMOTE_PORT := 5432
+# DB_SYNC_EXCLUDE_TABLES := cache cache_locks jobs job_batches failed_jobs
+# DB_SYNC_PG_DUMP := /opt/homebrew/opt/postgresql@16/bin/pg_dump
+# DB_SYNC_PUBLISH_APP_PREVIOUS_KEYS := false
+
+# Set true for SSO / role-chained AWS profiles where the Go SDK and the AWS CLI
+# resolve credentials differently. Causes the Makefile to export credentials via
+# `aws configure export-credentials` before each terraform invocation.
+# USE_AWS_CREDS_EXPORT := false

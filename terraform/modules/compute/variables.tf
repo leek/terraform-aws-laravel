@@ -272,8 +272,8 @@ variable "cloudfront_domain" {
   default     = ""
 
   validation {
-    condition     = var.cloudfront_domain == "" || !can(regex("^https?://", var.cloudfront_domain))
-    error_message = "cloudfront_domain must be a bare domain (no protocol). Example: cdn.example.com"
+    condition     = var.cloudfront_domain == "" || can(regex("^[a-zA-Z0-9][a-zA-Z0-9.-]+[a-zA-Z0-9]$", var.cloudfront_domain))
+    error_message = "cloudfront_domain must be a bare domain (no scheme, path, or trailing slash), e.g. cdn.example.com"
   }
 }
 
@@ -292,6 +292,24 @@ variable "enable_scheduler" {
   description = "Enable the scheduler service"
   type        = bool
   default     = true
+}
+
+variable "enable_container_insights" {
+  description = "Enable ECS Container Insights (~$26/mo)"
+  type        = bool
+  default     = false
+}
+
+variable "off_hours_min_capacity" {
+  description = "Min tasks during scheduled off-hours scale-down"
+  type        = number
+  default     = 1
+}
+
+variable "mail_from_name" {
+  description = "Display name for outbound mail (MAIL_FROM_NAME)"
+  type        = string
+  default     = ""
 }
 
 variable "app_server_mode" {

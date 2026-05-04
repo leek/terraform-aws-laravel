@@ -51,7 +51,7 @@ variable "cloudwatch_logs_kms_key_id" {
 }
 
 variable "log_retention_days" {
-  description = "Number of days to retain ECS CloudWatch logs"
+  description = "Number of days to retain ECS CloudWatch logs. 30 default suits HIPAA-friendly templates; raise for longer audits."
   type        = number
-  default     = 7
+  default     = 30
 }

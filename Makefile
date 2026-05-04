@@ -28,6 +28,19 @@ EMOJI_staging := 🚧
 EMOJI_uat := 🧪
 EMOJI_production := 🏭
 
+# Database sync (used by db.%.tunnel, db.%.push, db.%.pull)
+# Override these in Makefile.config for non-default Postgres setups.
+DB_SYNC_PORT := 54320
+DB_SYNC_REMOTE_PORT := 5432
+DB_SYNC_EXCLUDE_TABLES := cache cache_locks jobs job_batches failed_jobs
+DB_SYNC_POSTGRES_BIN := /opt/homebrew/opt/postgresql@16/bin
+DB_SYNC_PG_DUMP := $(DB_SYNC_POSTGRES_BIN)/pg_dump
+
+# When true, db.%.push publishes the local APP_KEY to /<APP_NAME>/<env>/APP_PREVIOUS_KEYS
+# so encrypted columns from the local snapshot remain decryptable on the remote.
+# Requires application support for APP_PREVIOUS_KEYS-style key rotation.
+DB_SYNC_PUBLISH_APP_PREVIOUS_KEYS := false
+
 # Load optional local config (overrides above variables)
 -include Makefile.config
 
@@ -41,8 +54,22 @@ emoji = $(EMOJI_$(1))
 # AWS CLI with profile (disable pager to avoid interactive less)
 aws = AWS_PAGER="" aws --profile $(AWS_PROFILE)
 
-# Terraform with AWS profile, region, and directory
-tf = AWS_PROFILE=$(AWS_PROFILE) AWS_REGION=$(AWS_REGION) terraform -chdir=$(TF_DIR)
+# Read a value from local .env file (e.g. $(call dotenv,DB_PASSWORD))
+dotenv = $(shell grep -E '^$(1)=' .env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
+
+# Build pg_dump --exclude-table-data flags from DB_SYNC_EXCLUDE_TABLES
+db_exclude_tables = $(foreach tbl,$(DB_SYNC_EXCLUDE_TABLES),--exclude-table-data=$(tbl))
+
+# Terraform with AWS profile, region, and directory.
+# Set USE_AWS_CREDS_EXPORT=true in Makefile.config to export credentials via the
+# CLI before invoking terraform — useful with SSO / role-chained profiles where
+# the Go SDK's profile resolution differs from the CLI's.
+ifeq ($(USE_AWS_CREDS_EXPORT),true)
+aws_creds = eval $$(aws --profile $(AWS_PROFILE) configure export-credentials --format env) &&
+else
+aws_creds =
+endif
+tf = $(aws_creds) AWS_PROFILE=$(AWS_PROFILE) AWS_REGION=$(AWS_REGION) terraform -chdir=$(TF_DIR)
 
 # Get cluster name for environment
 cluster = $(APP_NAME)-$(1)
@@ -68,14 +95,14 @@ terraform.inframap:
 .PHONY: terraform.%.plan
 terraform.%.plan:
 	@echo "🔍 Running Terraform plan for $(call emoji,$*) $* environment..."
-	@$(tf) workspace select $* 2>/dev/null || $(tf) workspace new $*
+	@$(tf) workspace select $* 2>/dev/null || $(tf) workspace new $* 2>/dev/null || true
 	@$(tf) plan -var-file="environments/$*.tfvars"
 
 # Generic terraform apply target
 .PHONY: terraform.%.apply
 terraform.%.apply:
 	@echo "🚀 Applying Terraform changes for $(call emoji,$*) $* environment..."
-	@$(tf) workspace select $* 2>/dev/null || $(tf) workspace new $*
+	@$(tf) workspace select $* 2>/dev/null || $(tf) workspace new $* 2>/dev/null || true
 	@$(tf) apply -auto-approve -var-file="environments/$*.tfvars"
 
 # Production requires explicit confirmation (no auto-approve)
@@ -95,9 +122,12 @@ INSTALL_MYSQL := true
 INSTALL_PGSQL := true
 INSTALL_CHROMIUM := false
 INSTALL_GNUPG := false
-COMPOSER_IMAGE := composer:2
+INSTALL_IMAGICK := false
+COMPOSER_IMAGE := composer:2.9.7@sha256:dc292c5c0f95f526b051d4c341bf08e7e2b18504c74625e3203d7f123050e318
 CMD ?= php artisan about
-MIGRATE_CMD ?= php artisan migrate --force --isolated
+# Migrations bracketed by down/up to keep destructive migrations off live traffic.
+# Override in Makefile.config if your release flow handles this elsewhere.
+MIGRATE_CMD ?= php artisan down && php artisan migrate --force --isolated && php artisan up
 
 # Image tag defaults to the current git SHA so deploys are deterministic and
 # previous task-definition revisions remain meaningful rollback points.
@@ -118,6 +148,7 @@ docker.%.build:
 		--build-arg INSTALL_PGSQL=$(INSTALL_PGSQL) \
 		--build-arg INSTALL_CHROMIUM=$(INSTALL_CHROMIUM) \
 		--build-arg INSTALL_GNUPG=$(INSTALL_GNUPG) \
+		--build-arg INSTALL_IMAGICK=$(INSTALL_IMAGICK) \
 		--build-arg COMPOSER_IMAGE=$(COMPOSER_IMAGE) \
 		-t $(APP_NAME)-$*:$(IMAGE_TAG) \
 		-t $(APP_NAME)-$*:latest --load .
@@ -147,7 +178,7 @@ NIGHTWATCH_AGENT_TAG := v1
 .PHONY: ecr.%.mirror-nightwatch
 ecr.%.mirror-nightwatch:
 	@echo "🪞 Mirroring $(NIGHTWATCH_AGENT_UPSTREAM):$(NIGHTWATCH_AGENT_TAG) -> ECR ($*)..."
-	@$(tf) workspace select $* 2>/dev/null || $(tf) workspace new $* 2>/dev/null || true
+	@$(tf) workspace select $* 2>/dev/null || $(tf) workspace new $* 2>/dev/null || true 2>/dev/null || true
 	@ECR=$$($(tf) output -raw nightwatch_agent_repository_url 2>/dev/null) && \
 	if [ -z "$$ECR" ]; then \
 		echo "❌ ERROR: terraform output 'nightwatch_agent_repository_url' is empty. Set enable_nightwatch_agent_mirror = true and apply first."; \
@@ -218,7 +249,7 @@ aws.%.redeploy.quiet:
 # scoped to containers from this app's ECR repo so sidecars keep their own refs.
 .PHONY: aws.%.deploy.quiet
 aws.%.deploy.quiet:
-	@set -eu; \
+	@set -euo pipefail; \
 	if [ -z "$(IMAGE_TAG)" ]; then \
 		echo "❌ ERROR: IMAGE_TAG is empty"; exit 1; \
 	fi; \
@@ -340,10 +371,44 @@ aws.%.artisan:
 # Bastion Targets
 # ========================================
 
+# Start bastion instance (cost saver: stop bastions off-hours, start when needed)
+.PHONY: bastion.%.start
+bastion.%.start:
+	@echo "🚀 Starting $* bastion host..."
+	@INSTANCE_ID=$$($(aws) ec2 describe-instances \
+		--filters "Name=tag:Name,Values=$(APP_NAME)-$*-bastion" "Name=instance-state-name,Values=stopped" \
+		--query 'Reservations[].Instances[].InstanceId' --output text) && \
+	if [ -z "$$INSTANCE_ID" ]; then \
+		echo "⚠️  No stopped bastion found for $* (may already be running)"; \
+		exit 0; \
+	fi && \
+	$(aws) ec2 start-instances --instance-ids $$INSTANCE_ID > /dev/null && \
+	echo "⏳ Waiting for instance to be running..." && \
+	$(aws) ec2 wait instance-running --instance-ids $$INSTANCE_ID && \
+	echo "⏳ Waiting for status checks..." && \
+	$(aws) ec2 wait instance-status-ok --instance-ids $$INSTANCE_ID && \
+	NEW_IP=$$($(aws) ec2 describe-instances --instance-ids $$INSTANCE_ID \
+		--query 'Reservations[].Instances[].PublicIpAddress' --output text) && \
+	echo "✅ Bastion running at $$NEW_IP"
+
+# Stop bastion instance
+.PHONY: bastion.%.stop
+bastion.%.stop:
+	@echo "🛑 Stopping $* bastion host..."
+	@INSTANCE_ID=$$($(aws) ec2 describe-instances \
+		--filters "Name=tag:Name,Values=$(APP_NAME)-$*-bastion" "Name=instance-state-name,Values=running" \
+		--query 'Reservations[].Instances[].InstanceId' --output text) && \
+	if [ -z "$$INSTANCE_ID" ]; then \
+		echo "⚠️  No running bastion found for $* (may already be stopped)"; \
+		exit 0; \
+	fi && \
+	$(aws) ec2 stop-instances --instance-ids $$INSTANCE_ID > /dev/null && \
+	echo "✅ Bastion stopping (instance: $$INSTANCE_ID)"
+
 .PHONY: bastion.%.tunnel.db bastion.%.tunnel.mysql bastion.%.tunnel.pgsql
 bastion.%.tunnel.db:
 	@echo "🔗 Opening database tunnel to $* via bastion..."
-	@$(tf) workspace select $* 2>/dev/null || $(tf) workspace new $* 2>/dev/null || true && \
+	@$(tf) workspace select $* 2>/dev/null || $(tf) workspace new $* 2>/dev/null || true 2>/dev/null || true && \
 	BASTION_IP=$$($(tf) output -raw bastion_public_ip 2>/dev/null) && \
 	RDS_ENDPOINT=$$($(tf) output -raw rds_endpoint 2>/dev/null) && \
 	RDS_PORT=$$($(tf) output -raw rds_port 2>/dev/null) && \
@@ -363,7 +428,7 @@ bastion.%.tunnel.pgsql:
 .PHONY: bastion.%.tunnel.redis
 bastion.%.tunnel.redis:
 	@echo "🔗 Opening Redis tunnel to $* via bastion..."
-	@$(tf) workspace select $* 2>/dev/null || $(tf) workspace new $* 2>/dev/null || true && \
+	@$(tf) workspace select $* 2>/dev/null || $(tf) workspace new $* 2>/dev/null || true 2>/dev/null || true && \
 	BASTION_IP=$$($(tf) output -raw bastion_public_ip 2>/dev/null) && \
 	REDIS_ENDPOINT=$$($(tf) output -raw redis_endpoint 2>/dev/null) && \
 	REDIS_PORT=$$($(tf) output -raw redis_port 2>/dev/null) && \
@@ -378,7 +443,7 @@ bastion.%.tunnel.redis:
 .PHONY: bastion.%.ssh
 bastion.%.ssh:
 	@echo "🔗 Connecting to $* bastion host..."
-	@$(tf) workspace select $* 2>/dev/null || $(tf) workspace new $* && \
+	@$(tf) workspace select $* 2>/dev/null || $(tf) workspace new $* 2>/dev/null || true && \
 	BASTION_IP=$$($(tf) output -raw bastion_public_ip 2>/dev/null) && \
 	if [ -z "$$BASTION_IP" ] || [ "$$BASTION_IP" = "null" ] || echo "$$BASTION_IP" | grep -q "Bastion disabled"; then \
 		echo "❌ ERROR: Bastion host not found or not enabled in $*"; \
@@ -387,6 +452,202 @@ bastion.%.ssh:
 	fi && \
 	echo "📋 Connecting to bastion at $$BASTION_IP" && \
 	ssh -i $(SSH_KEY) ec2-user@$$BASTION_IP
+
+# ========================================
+# Database Sync Targets (PostgreSQL)
+# ========================================
+#
+# These targets shell out via the bastion host. PostgreSQL-only — adapt
+# accordingly for MySQL/MariaDB engines.
+#
+# Required setup:
+#   - var.enable_bastion = true with an SSH key on disk at $(SSH_KEY)
+#   - pg_dump on the local machine at $(DB_SYNC_PG_DUMP)
+#   - jq on PATH
+
+# PostgreSQL tunnel on a non-conflicting port (DB_SYNC_PORT, default 54320)
+# so it can run alongside a local Postgres on 5432.
+.PHONY: db.%.tunnel
+db.%.tunnel:
+	@echo "🔗 Opening database tunnel to $* on port $(DB_SYNC_PORT)..."
+	@$(tf) workspace select $* 2>/dev/null || $(tf) workspace new $* 2>/dev/null || true && \
+	BASTION_IP=$$($(tf) output -raw bastion_public_ip 2>/dev/null) && \
+	RDS_ENDPOINT=$$($(tf) output -raw rds_endpoint 2>/dev/null) && \
+	if [ -z "$$BASTION_IP" ] || echo "$$BASTION_IP" | grep -q "Bastion disabled"; then \
+		echo "❌ ERROR: Bastion host not enabled in $*"; \
+		exit 1; \
+	fi && \
+	echo "📋 Tunneling localhost:$(DB_SYNC_PORT) -> $$RDS_ENDPOINT:$(DB_SYNC_REMOTE_PORT) via $$BASTION_IP" && \
+	ssh -i $(SSH_KEY) -N -L $(DB_SYNC_PORT):$$RDS_ENDPOINT:$(DB_SYNC_REMOTE_PORT) ec2-user@$$BASTION_IP
+
+# Push local Postgres database to remote (DESTRUCTIVE — overwrites remote).
+# Requires interactive confirmation. Brackets in maintenance mode + EXIT trap.
+.PHONY: db.%.push
+db.%.push:
+	@set -o pipefail && \
+	if ! command -v jq >/dev/null 2>&1; then \
+		echo "❌ ERROR: jq is required. Install with: brew install jq"; \
+		exit 1; \
+	fi && \
+	if [ ! -x "$(DB_SYNC_PG_DUMP)" ]; then \
+		echo "❌ ERROR: pg_dump is required at $(DB_SYNC_PG_DUMP). Set DB_SYNC_PG_DUMP in Makefile.config to override."; \
+		exit 1; \
+	fi && \
+	echo "⚠️  WARNING: You are about to OVERWRITE the $* remote database with your LOCAL data." && \
+	printf "Type 'yes-push-$*' to confirm: " && \
+	read CONFIRM && \
+	if [ "$$CONFIRM" != "yes-push-$*" ]; then \
+		echo "❌ Aborted."; \
+		exit 1; \
+	fi && \
+	echo "⬆️  Pushing local database to $*..." && \
+	$(tf) workspace select $* 2>/dev/null || $(tf) workspace new $* 2>/dev/null || true && \
+	BASTION_IP=$$($(tf) output -raw bastion_public_ip 2>/dev/null) && \
+	RDS_ENDPOINT=$$($(tf) output -raw rds_endpoint 2>/dev/null) && \
+	RDS_DB_NAME=$$($(tf) output -raw rds_database_name 2>/dev/null) && \
+	RDS_SECRET_ARN=$$($(tf) output -raw rds_secret_arn 2>/dev/null) && \
+	if [ -z "$$BASTION_IP" ] || echo "$$BASTION_IP" | grep -q "Bastion disabled"; then \
+		echo "❌ ERROR: Bastion host not enabled in $*"; \
+		exit 1; \
+	fi && \
+	echo "🔑 Retrieving RDS credentials..." && \
+	SECRET_JSON=$$($(aws) secretsmanager get-secret-value \
+		--secret-id "$$RDS_SECRET_ARN" \
+		--query 'SecretString' \
+		--output text 2>/dev/null) && \
+	if [ -z "$$SECRET_JSON" ]; then \
+		echo "❌ ERROR: Failed to retrieve RDS secret"; \
+		exit 1; \
+	fi && \
+	RDS_USER=$$(echo "$$SECRET_JSON" | jq -r '.username') && \
+	RDS_PASS=$$(echo "$$SECRET_JSON" | jq -r '.password') && \
+	if [ -z "$$RDS_USER" ] || [ "$$RDS_USER" = "null" ]; then \
+		echo "❌ ERROR: Failed to parse credentials from secret"; \
+		exit 1; \
+	fi && \
+	APP_DB_USER=$$($(aws) ssm get-parameter \
+		--name "/$(APP_NAME)/$*/DB_USERNAME" \
+		--with-decryption \
+		--query 'Parameter.Value' \
+		--output text 2>/dev/null) && \
+	if [ -z "$$APP_DB_USER" ] || [ "$$APP_DB_USER" = "None" ]; then \
+		echo "❌ ERROR: Failed to retrieve app database user from SSM"; \
+		exit 1; \
+	fi && \
+	echo "🔐 Ensuring restore can switch to $$APP_DB_USER..." && \
+	printf '%s\n' 'GRANT :"app_user" TO :"admin_user";' | \
+	ssh -i $(SSH_KEY) -o ConnectTimeout=10 ec2-user@$$BASTION_IP \
+		"PGPASSWORD='$$RDS_PASS' psql -h $$RDS_ENDPOINT -U '$$RDS_USER' -d '$$RDS_DB_NAME' -v ON_ERROR_STOP=1 -v admin_user='$$RDS_USER' -v app_user='$$APP_DB_USER'" && \
+	MAINTENANCE_ENABLED=0 && \
+	trap 'if [ "$$MAINTENANCE_ENABLED" = "1" ]; then echo "🔧 Bringing $* back online after failure..."; $(MAKE) aws.$*.artisan CMD="php artisan up"; fi' EXIT && \
+	echo "🔧 Putting $* in maintenance mode..." && \
+	$(MAKE) aws.$*.artisan CMD="php artisan down" && \
+	MAINTENANCE_ENABLED=1 && \
+	echo "📦 Dumping local database $(call dotenv,DB_DATABASE) and importing into $$RDS_DB_NAME via bastion..." && \
+	{ \
+		printf '%s\n' \
+			'BEGIN;' \
+			'DROP SCHEMA IF EXISTS public CASCADE;' \
+			'CREATE SCHEMA public AUTHORIZATION :"app_user";' \
+			'GRANT ALL ON SCHEMA public TO public;' \
+			'CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;' \
+			'CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA public;' \
+			'CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;' \
+			'CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;' \
+			'SET ROLE :"app_user";'; \
+		PGPASSWORD=$(call dotenv,DB_PASSWORD) "$(DB_SYNC_PG_DUMP)" -h $(call dotenv,DB_HOST) -p $(call dotenv,DB_PORT) \
+			-U $(call dotenv,DB_USERNAME) \
+			--no-owner --no-privileges --no-comments \
+			$(call db_exclude_tables) \
+			$(call dotenv,DB_DATABASE) && \
+		printf '%s\n' 'RESET ROLE;' 'COMMIT;'; \
+	} | \
+	ssh -i $(SSH_KEY) -o ConnectTimeout=10 ec2-user@$$BASTION_IP \
+		"PGPASSWORD='$$RDS_PASS' psql -h $$RDS_ENDPOINT -U '$$RDS_USER' -d '$$RDS_DB_NAME' -v ON_ERROR_STOP=1 -v app_user='$$APP_DB_USER'" && \
+	if [ "$(DB_SYNC_PUBLISH_APP_PREVIOUS_KEYS)" = "true" ]; then \
+		echo "🔐 Publishing local APP_KEY as APP_PREVIOUS_KEYS on $* so encrypted columns remain decryptable..."; \
+		LOCAL_APP_KEY="$(call dotenv,APP_KEY)"; \
+		if [ -z "$$LOCAL_APP_KEY" ]; then \
+			echo "❌ ERROR: Local APP_KEY not found in .env — cannot publish APP_PREVIOUS_KEYS"; \
+			exit 1; \
+		fi; \
+		$(aws) ssm put-parameter \
+			--name "/$(APP_NAME)/$*/APP_PREVIOUS_KEYS" \
+			--value "$$LOCAL_APP_KEY" \
+			--type SecureString \
+			--overwrite >/dev/null; \
+		echo "🔄 Force redeploying $* services to pick up APP_PREVIOUS_KEYS..."; \
+		$(MAKE) aws.$*.redeploy; \
+	fi && \
+	echo "🔧 Bringing $* back online..." && \
+	$(MAKE) aws.$*.artisan CMD="php artisan up" && \
+	MAINTENANCE_ENABLED=0 && \
+	trap - EXIT && \
+	echo "✅ Push to $* complete!" && \
+	if [ "$(DB_SYNC_PUBLISH_APP_PREVIOUS_KEYS)" = "true" ]; then \
+		echo "ℹ️  Run 'make db.$*.push.clear-previous-keys' after you've re-encrypted or no longer need the old key."; \
+	fi
+
+# Reset APP_PREVIOUS_KEYS on remote to a sentinel and redeploy.
+.PHONY: db.%.push.clear-previous-keys
+db.%.push.clear-previous-keys:
+	@echo "🧹 Clearing APP_PREVIOUS_KEYS on $*..."
+	@$(aws) ssm put-parameter \
+		--name "/$(APP_NAME)/$*/APP_PREVIOUS_KEYS" \
+		--value "0" \
+		--type SecureString \
+		--overwrite >/dev/null
+	@$(MAKE) aws.$*.redeploy
+	@echo "✅ APP_PREVIOUS_KEYS cleared on $*"
+
+# Pull remote Postgres database to local (DESTRUCTIVE — overwrites local).
+# Production requires interactive confirmation.
+.PHONY: db.%.pull
+db.%.pull:
+	@command -v jq >/dev/null 2>&1 || { echo "❌ ERROR: jq is required. Install with: brew install jq"; exit 1; } && \
+	if [ "$*" = "production" ]; then \
+		echo "⚠️  WARNING: You are about to OVERWRITE your local database with PRODUCTION data."; \
+		printf "Type 'yes-pull-production' to confirm: "; \
+		read CONFIRM; \
+		if [ "$$CONFIRM" != "yes-pull-production" ]; then \
+			echo "❌ Aborted."; \
+			exit 1; \
+		fi; \
+	fi && \
+	echo "⬇️  Pulling $* database to local..." && \
+	$(tf) workspace select $* 2>/dev/null || $(tf) workspace new $* 2>/dev/null || true && \
+	BASTION_IP=$$($(tf) output -raw bastion_public_ip 2>/dev/null) && \
+	RDS_ENDPOINT=$$($(tf) output -raw rds_endpoint 2>/dev/null) && \
+	RDS_DB_NAME=$$($(tf) output -raw rds_database_name 2>/dev/null) && \
+	RDS_SECRET_ARN=$$($(tf) output -raw rds_secret_arn 2>/dev/null) && \
+	if [ -z "$$BASTION_IP" ] || echo "$$BASTION_IP" | grep -q "Bastion disabled"; then \
+		echo "❌ ERROR: Bastion host not enabled in $*"; \
+		exit 1; \
+	fi && \
+	echo "🔑 Retrieving RDS credentials..." && \
+	SECRET_JSON=$$($(aws) secretsmanager get-secret-value \
+		--secret-id "$$RDS_SECRET_ARN" \
+		--query 'SecretString' \
+		--output text 2>/dev/null) && \
+	if [ -z "$$SECRET_JSON" ]; then \
+		echo "❌ ERROR: Failed to retrieve RDS secret"; \
+		exit 1; \
+	fi && \
+	RDS_USER=$$(echo "$$SECRET_JSON" | jq -r '.username') && \
+	RDS_PASS=$$(echo "$$SECRET_JSON" | jq -r '.password') && \
+	if [ -z "$$RDS_USER" ] || [ "$$RDS_USER" = "null" ]; then \
+		echo "❌ ERROR: Failed to parse credentials from secret"; \
+		exit 1; \
+	fi && \
+	echo "📥 Dumping remote database $$RDS_DB_NAME via bastion and importing locally..." && \
+	ssh -i $(SSH_KEY) -o ConnectTimeout=10 ec2-user@$$BASTION_IP \
+		"PGPASSWORD='$$RDS_PASS' pg_dump -h $$RDS_ENDPOINT -U '$$RDS_USER' \
+		--no-owner --no-privileges --clean --if-exists \
+		'$$RDS_DB_NAME'" | \
+	PGPASSWORD=$(call dotenv,DB_PASSWORD) psql -h $(call dotenv,DB_HOST) -p $(call dotenv,DB_PORT) \
+		-U $(call dotenv,DB_USERNAME) \
+		-d $(call dotenv,DB_DATABASE) -v ON_ERROR_STOP=1 && \
+	echo "✅ Pull from $* complete!"
 
 # ========================================
 # Deploy Targets
@@ -457,8 +718,15 @@ help:
 	@echo ""
 	@echo "Bastion:"
 	@echo "  make bastion.<env>.ssh                 - SSH into bastion host"
+	@echo "  make bastion.<env>.start               - Start (boot) the bastion EC2 instance"
+	@echo "  make bastion.<env>.stop                - Stop the bastion EC2 instance"
 	@echo "  make bastion.<env>.tunnel.db           - Database tunnel via bastion"
 	@echo "  make bastion.<env>.tunnel.redis        - Redis tunnel via bastion"
+	@echo ""
+	@echo "Database (Postgres-only):"
+	@echo "  make db.<env>.tunnel                   - Tunnel to RDS on DB_SYNC_PORT (54320)"
+	@echo "  make db.<env>.push                     - Overwrite remote DB with local (interactive confirmation)"
+	@echo "  make db.<env>.pull                     - Overwrite local DB with remote"
 	@echo ""
 	@echo "S3:"
 	@echo "  make s3.<env>.seed                     - Seed S3 bucket with storage/app/public"

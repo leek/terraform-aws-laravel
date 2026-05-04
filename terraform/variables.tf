@@ -189,6 +189,18 @@ variable "max_capacity" {
   default     = 10
 }
 
+variable "off_hours_min_capacity" {
+  description = "Minimum tasks during scheduled off-hours scale-down. Lets enable_scheduled_scaling actually save cost when min_capacity is set high for prod resilience."
+  type        = number
+  default     = 1
+}
+
+variable "enable_container_insights" {
+  description = "Enable ECS Container Insights (adds CloudWatch metrics + ~$26/mo cost per cluster)"
+  type        = bool
+  default     = false
+}
+
 # Application Server Mode
 variable "app_server_mode" {
   description = "Application server mode: 'php-fpm' (default), 'octane-swoole', 'octane-frankenphp', or 'octane-roadrunner'. Octane modes provide better performance for Laravel applications."
@@ -409,9 +421,9 @@ variable "redis_node_type" {
 }
 
 variable "redis_num_cache_nodes" {
-  description = "Number of cache clusters for the Redis replication group. 2+ enables automatic failover and Multi-AZ."
+  description = "Number of cache clusters for the Redis replication group. 2+ enables automatic failover and Multi-AZ (default)."
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "redis_engine_version" {
@@ -455,15 +467,21 @@ variable "enabled_vpc_interface_endpoints" {
 }
 
 variable "rds_additional_ingress_cidrs" {
-  description = "Additional CIDR blocks allowed to connect to RDS/Aurora"
-  type        = list(string)
-  default     = []
+  description = "Additional CIDR blocks allowed to connect to RDS/Aurora. Each entry takes a description recorded on the security group rule."
+  type = list(object({
+    cidr        = string
+    description = string
+  }))
+  default = []
 }
 
 variable "rds_additional_ingress_security_group_ids" {
-  description = "Additional security group IDs allowed to connect to RDS/Aurora"
-  type        = list(string)
-  default     = []
+  description = "Additional security group IDs allowed to connect to RDS/Aurora. Each entry takes a description recorded on the security group rule."
+  type = list(object({
+    security_group_id = string
+    description       = string
+  }))
+  default = []
 }
 
 # ========================================
@@ -729,12 +747,28 @@ variable "ses_mail_from_subdomain" {
   description = "Subdomain label used for the SES custom MAIL FROM domain. Empty string disables custom MAIL FROM."
   type        = string
   default     = "mail"
+
+  validation {
+    condition     = var.ses_mail_from_subdomain == "" || can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", var.ses_mail_from_subdomain))
+    error_message = "ses_mail_from_subdomain must be a valid DNS label (lowercase alphanumeric and hyphens, must start/end alphanumeric)."
+  }
 }
 
 variable "ses_mail_from_behavior_on_mx_failure" {
-  description = "SES behavior when the custom MAIL FROM MX record is not resolvable"
+  description = "SES behavior when the custom MAIL FROM MX record is not resolvable: UseDefaultValue or RejectMessage"
   type        = string
   default     = "UseDefaultValue"
+
+  validation {
+    condition     = contains(["UseDefaultValue", "RejectMessage"], var.ses_mail_from_behavior_on_mx_failure)
+    error_message = "ses_mail_from_behavior_on_mx_failure must be UseDefaultValue or RejectMessage."
+  }
+}
+
+variable "mail_from_name" {
+  description = "Display name for outbound mail (MAIL_FROM_NAME). Empty string defaults to app_name."
+  type        = string
+  default     = ""
 }
 
 variable "ses_enable_event_destination" {
@@ -744,9 +778,17 @@ variable "ses_enable_event_destination" {
 }
 
 variable "ses_event_matching_types" {
-  description = "SES event types routed to the SNS events topic"
+  description = "SES event types routed to the SNS events topic. Note: deliveryDelay is SES v2 only and rejected here."
   type        = list(string)
   default     = ["bounce", "complaint", "reject"]
+
+  validation {
+    condition = alltrue([
+      for t in var.ses_event_matching_types :
+      contains(["send", "reject", "bounce", "complaint", "delivery", "open", "click", "renderingFailure"], t)
+    ])
+    error_message = "ses_event_matching_types entries must be one of: send, reject, bounce, complaint, delivery, open, click, renderingFailure. (deliveryDelay is SES v2 only.)"
+  }
 }
 
 variable "ses_event_notification_emails" {
@@ -768,6 +810,46 @@ variable "ses_suppressed_reasons" {
 }
 
 # ========================================
+# OPTIONAL: SMS (AWS End User Messaging SMS / Pinpoint SMS Voice v2)
+# ========================================
+
+variable "enable_sms" {
+  description = "Enable AWS End User Messaging SMS module (SNS topic, configuration set, two-way SMS wiring)"
+  type        = bool
+  default     = false
+}
+
+variable "aws_sms_phone_number_id" {
+  description = "Existing AWS End User Messaging phone number ID (phone-...) to attach two-way SMS to. Empty skips attachment."
+  type        = string
+  default     = ""
+}
+
+variable "aws_sms_configuration_set_name" {
+  description = "Name of the SMS configuration set. Must match AWS_SMS_CONFIGURATION_SET env var consumed by the application."
+  type        = string
+  default     = ""
+}
+
+variable "aws_sms_default_message_type" {
+  description = "Default SMS message type: TRANSACTIONAL or PROMOTIONAL"
+  type        = string
+  default     = "TRANSACTIONAL"
+}
+
+variable "aws_sms_webhook_path" {
+  description = "Path on the application that receives SNS notifications for SMS events"
+  type        = string
+  default     = "/api/webhooks/aws/sms/events"
+}
+
+variable "aws_sms_subscription_confirmation_timeout_minutes" {
+  description = "How long Terraform waits for the SNS HTTPS subscription to be confirmed"
+  type        = number
+  default     = 3
+}
+
+# ========================================
 # OPTIONAL: Monitoring
 # ========================================
 
@@ -780,7 +862,7 @@ variable "enable_cloudtrail" {
 variable "log_retention_days" {
   description = "Number of days to retain CloudWatch logs"
   type        = number
-  default     = 7
+  default     = 30
 }
 
 variable "healthcheck_alarm_emails" {
@@ -805,6 +887,12 @@ variable "enable_bot_control" {
   description = "Enable AWS WAF Bot Control managed rule set"
   type        = bool
   default     = false
+}
+
+variable "bot_control_excluded_path_prefixes" {
+  description = "URI path prefixes excluded from Bot Control inspection (e.g. ['/api/']). Cost saver for endpoints that don't need browser fingerprinting."
+  type        = list(string)
+  default     = []
 }
 
 variable "rate_limit_general" {
@@ -894,6 +982,12 @@ variable "cloudfront_app_price_class" {
   default     = "PriceClass_100"
 }
 
+variable "cloudfront_web_acl_arn" {
+  description = "ARN of a CLOUDFRONT-scope WAF Web ACL to attach to the app CloudFront distribution. Empty skips association."
+  type        = string
+  default     = ""
+}
+
 # ========================================
 # OPTIONAL: Additional Environment Variables
 # ========================================
@@ -918,9 +1012,9 @@ variable "cost_center" {
 }
 
 variable "kms_deletion_window" {
-  description = "KMS key deletion window in days"
+  description = "KMS key deletion window in days (7-30). Defaults to AWS-default 30 to reduce risk of accidental loss."
   type        = number
-  default     = 7
+  default     = 30
 }
 
 # ========================================

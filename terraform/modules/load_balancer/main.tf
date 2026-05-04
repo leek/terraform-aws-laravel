@@ -126,7 +126,10 @@ resource "aws_wafv2_web_acl" "main" {
     }
   }
 
-  # AWS Managed Rules - Bot Control Rule Set (~$10/mo flat + request fees)
+  # AWS Managed Rules - Bot Control Rule Set (~$10/mo flat + request fees).
+  # bot_control_excluded_path_prefixes scopes Bot Control out of API endpoints
+  # that don't benefit from browser fingerprinting and avoids paying request
+  # fees on traffic that doesn't need it.
   dynamic "rule" {
     for_each = var.enable_bot_control ? [1] : []
     content {
@@ -153,6 +156,34 @@ resource "aws_wafv2_web_acl" "main" {
             name = "CategorySearchEngine"
             action_to_use {
               count {}
+            }
+          }
+
+          dynamic "scope_down_statement" {
+            for_each = length(var.bot_control_excluded_path_prefixes) > 0 ? [1] : []
+            content {
+              not_statement {
+                statement {
+                  or_statement {
+                    dynamic "statement" {
+                      for_each = var.bot_control_excluded_path_prefixes
+                      content {
+                        byte_match_statement {
+                          search_string         = statement.value
+                          positional_constraint = "STARTS_WITH"
+                          field_to_match {
+                            uri_path {}
+                          }
+                          text_transformation {
+                            priority = 0
+                            type     = "NONE"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -553,6 +584,7 @@ resource "aws_cloudfront_distribution" "app" {
   price_class     = var.cloudfront_app_price_class
   aliases         = var.cloudfront_app_aliases
   http_version    = "http2and3"
+  web_acl_id      = var.cloudfront_web_acl_arn != "" ? var.cloudfront_web_acl_arn : null
 
   origin {
     domain_name = aws_lb.main.dns_name

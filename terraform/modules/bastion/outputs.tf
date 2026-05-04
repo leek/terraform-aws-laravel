@@ -18,9 +18,9 @@ output "ssh_command" {
   value       = "ssh -i ~/.ssh/${var.key_name}.pem ec2-user@${aws_instance.bastion.public_ip}"
 }
 
-output "mysql_tunnel_command" {
-  description = "Command to create MySQL tunnel"
-  value       = "ssh -i ~/.ssh/${var.key_name}.pem -L 3306:RDS_ENDPOINT:3306 ec2-user@${aws_instance.bastion.public_ip}"
+output "db_tunnel_command" {
+  description = "Command to create a database tunnel through the bastion (engine-aware port)"
+  value       = "ssh -i ~/.ssh/${var.key_name}.pem -L ${var.db_port}:RDS_ENDPOINT:${var.db_port} ec2-user@${aws_instance.bastion.public_ip}"
 }
 
 output "redis_tunnel_command" {

@@ -2,6 +2,14 @@
 # Route53 DNS Records
 # ========================================
 
+locals {
+  # When the app CloudFront distribution is in front of the ALB, alias the app
+  # records to it instead. CloudFront aliases require evaluate_target_health = false.
+  app_alias_name                   = var.cloudfront_app_enabled ? var.cloudfront_app_domain_name : var.alb_dns_name
+  app_alias_zone_id                = var.cloudfront_app_enabled ? var.cloudfront_app_hosted_zone_id : var.alb_zone_id
+  app_alias_evaluate_target_health = var.cloudfront_app_enabled ? false : true
+}
+
 # Main domain A record
 resource "aws_route53_record" "main" {
   zone_id = var.route53_zone_id
@@ -9,9 +17,9 @@ resource "aws_route53_record" "main" {
   type    = "A"
 
   alias {
-    name                   = var.alb_dns_name
-    zone_id                = var.alb_zone_id
-    evaluate_target_health = true
+    name                   = local.app_alias_name
+    zone_id                = local.app_alias_zone_id
+    evaluate_target_health = local.app_alias_evaluate_target_health
   }
 }
 
@@ -22,9 +30,9 @@ resource "aws_route53_record" "wildcard" {
   type    = "A"
 
   alias {
-    name                   = var.alb_dns_name
-    zone_id                = var.alb_zone_id
-    evaluate_target_health = true
+    name                   = local.app_alias_name
+    zone_id                = local.app_alias_zone_id
+    evaluate_target_health = local.app_alias_evaluate_target_health
   }
 }
 
@@ -35,9 +43,9 @@ resource "aws_route53_record" "www" {
   type    = "A"
 
   alias {
-    name                   = var.alb_dns_name
-    zone_id                = var.alb_zone_id
-    evaluate_target_health = true
+    name                   = local.app_alias_name
+    zone_id                = local.app_alias_zone_id
+    evaluate_target_health = local.app_alias_evaluate_target_health
   }
 }
 

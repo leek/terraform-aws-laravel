@@ -281,30 +281,32 @@ module "email" {
 module "load_balancer" {
   source = "./modules/load_balancer"
 
-  app_name                          = var.app_name
-  environment                       = var.environment
-  aws_region                        = var.aws_region
-  domain_name                       = var.domain_name
-  vpc_id                            = module.networking.vpc_id
-  public_subnets                    = module.networking.public_subnets
-  alb_security_group_id             = module.networking.alb_security_group_id
-  certificate_arn                   = module.certificates.certificate_arn
-  enable_https_listener             = local.primary_certificate_ready
-  alb_logs_bucket_name              = module.storage.alb_logs_bucket_name
-  enable_access_logs                = var.enable_alb_access_logs
-  blocked_uri_patterns              = var.blocked_uri_patterns
-  enable_bot_control                = var.enable_bot_control
-  rate_limit_general                = var.rate_limit_general
-  rate_limit_livewire               = var.rate_limit_livewire
-  rate_limit_excluded_path_prefixes = var.rate_limit_excluded_path_prefixes
-  rate_limit_excluded_exact_paths   = var.rate_limit_excluded_exact_paths
-  health_check_path                 = var.alb_health_check_path
-  enable_stickiness                 = var.enable_alb_stickiness
-  ssl_policy                        = var.alb_ssl_policy
-  enable_cloudfront_app             = var.enable_cloudfront_app
-  cloudfront_app_aliases            = var.cloudfront_app_aliases
-  cloudfront_app_certificate_arn    = var.cloudfront_app_certificate_arn
-  cloudfront_app_price_class        = var.cloudfront_app_price_class
+  app_name                           = var.app_name
+  environment                        = var.environment
+  aws_region                         = var.aws_region
+  domain_name                        = var.domain_name
+  vpc_id                             = module.networking.vpc_id
+  public_subnets                     = module.networking.public_subnets
+  alb_security_group_id              = module.networking.alb_security_group_id
+  certificate_arn                    = module.certificates.certificate_arn
+  enable_https_listener              = local.primary_certificate_ready
+  alb_logs_bucket_name               = module.storage.alb_logs_bucket_name
+  enable_access_logs                 = var.enable_alb_access_logs
+  blocked_uri_patterns               = var.blocked_uri_patterns
+  enable_bot_control                 = var.enable_bot_control
+  bot_control_excluded_path_prefixes = var.bot_control_excluded_path_prefixes
+  rate_limit_general                 = var.rate_limit_general
+  rate_limit_livewire                = var.rate_limit_livewire
+  rate_limit_excluded_path_prefixes  = var.rate_limit_excluded_path_prefixes
+  rate_limit_excluded_exact_paths    = var.rate_limit_excluded_exact_paths
+  health_check_path                  = var.alb_health_check_path
+  enable_stickiness                  = var.enable_alb_stickiness
+  ssl_policy                         = var.alb_ssl_policy
+  enable_cloudfront_app              = var.enable_cloudfront_app
+  cloudfront_app_aliases             = var.cloudfront_app_aliases
+  cloudfront_app_certificate_arn     = var.cloudfront_app_certificate_arn
+  cloudfront_app_price_class         = var.cloudfront_app_price_class
+  cloudfront_web_acl_arn             = var.cloudfront_web_acl_arn
   vanity_domains = [
     for vanity_domain in var.vanity_domains : {
       domain          = vanity_domain.domain
@@ -344,7 +346,7 @@ module "configuration" {
 # Compute (ECS cluster, services)
 module "compute" {
   source     = "./modules/compute"
-  depends_on = [module.load_balancer]
+  depends_on = [module.load_balancer, module.configuration]
 
   app_name                   = var.app_name
   environment                = var.environment
@@ -393,6 +395,9 @@ module "compute" {
   redis_endpoint                               = module.cache.redis_endpoint
   redis_port                                   = module.cache.redis_port
   ses_configuration_set_name                   = var.enable_ses ? module.email[0].ses_configuration_set_name : ""
+  mail_from_name                               = coalesce(var.mail_from_name, var.app_name)
+  enable_container_insights                    = var.enable_container_insights
+  off_hours_min_capacity                       = var.off_hours_min_capacity
   app_server_mode                              = var.app_server_mode
   additional_environment_variables             = var.additional_environment_variables
   additional_secret_environment_variable_names = nonsensitive([for secret in var.additional_secret_environment_variables : secret.name])
@@ -422,14 +427,17 @@ module "dns" {
   count  = var.manage_route53_dns ? 1 : 0
   source = "./modules/dns"
 
-  app_name        = var.app_name
-  environment     = var.environment
-  domain_name     = var.domain_name
-  route53_zone_id = local.route53_zone_id
-  alb_dns_name    = module.load_balancer.alb_dns_name
-  alb_zone_id     = module.load_balancer.alb_zone_id
-  dmarc_record    = var.dmarc_record
-  common_tags     = local.common_tags
+  app_name                      = var.app_name
+  environment                   = var.environment
+  domain_name                   = var.domain_name
+  route53_zone_id               = local.route53_zone_id
+  alb_dns_name                  = module.load_balancer.alb_dns_name
+  alb_zone_id                   = module.load_balancer.alb_zone_id
+  cloudfront_app_enabled        = var.enable_cloudfront_app
+  cloudfront_app_domain_name    = module.load_balancer.app_cloudfront_distribution_domain
+  cloudfront_app_hosted_zone_id = module.load_balancer.app_cloudfront_distribution_hosted_zone_id
+  dmarc_record                  = var.dmarc_record
+  common_tags                   = local.common_tags
 }
 
 # Meilisearch (Search Engine) - Optional
@@ -522,6 +530,24 @@ module "client_vpn" {
   target_subnet_id               = module.networking.private_subnets[1]
   additional_authorized_cidrs    = var.vpn_additional_authorized_cidrs
   common_tags                    = local.common_tags
+}
+
+# SMS - Optional (AWS End User Messaging SMS / Pinpoint SMS Voice v2)
+module "sms" {
+  count  = var.enable_sms ? 1 : 0
+  source = "./modules/sms"
+
+  app_name                                  = var.app_name
+  environment                               = var.environment
+  aws_region                                = var.aws_region
+  domain_name                               = var.domain_name
+  webhook_path                              = var.aws_sms_webhook_path
+  phone_number_id                           = var.aws_sms_phone_number_id
+  configuration_set_name                    = var.aws_sms_configuration_set_name
+  default_message_type                      = var.aws_sms_default_message_type
+  subscription_confirmation_timeout_minutes = var.aws_sms_subscription_confirmation_timeout_minutes
+  caller_identity_account_id                = data.aws_caller_identity.current.account_id
+  common_tags                               = local.common_tags
 }
 
 # Compliance and Auditing

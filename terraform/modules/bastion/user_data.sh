@@ -161,11 +161,13 @@ if [ "$IS_MYSQL" = true ]; then
   log "Creating MySQL/MariaDB users"
   mysql -h "${rds_endpoint}" -u "${rds_master_username}" -p"$MASTER_PASSWORD" <<MYSQL_SCRIPT
 CREATE USER IF NOT EXISTS '${app_db_username}'@'%' IDENTIFIED BY '${app_db_password}';
+ALTER USER '${app_db_username}'@'%' IDENTIFIED BY '${app_db_password}';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER,
       CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, CREATE VIEW,
       SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, TRIGGER, REFERENCES
 ON \`${rds_database_name}\`.* TO '${app_db_username}'@'%';
 CREATE USER IF NOT EXISTS 'read_only'@'%' IDENTIFIED BY '${db_read_only_password}';
+ALTER USER 'read_only'@'%' IDENTIFIED BY '${db_read_only_password}';
 GRANT SELECT, SHOW VIEW ON \`${rds_database_name}\`.* TO 'read_only'@'%';
 FLUSH PRIVILEGES;
 SELECT User, Host FROM mysql.user WHERE User IN ('${app_db_username}', 'read_only');
@@ -174,7 +176,7 @@ MYSQL_SCRIPT
 else
   log "Creating PostgreSQL users"
   PGPASSWORD="$MASTER_PASSWORD" psql -h "${rds_endpoint}" -U "${rds_master_username}" -d "${rds_database_name}" <<POSTGRES_SCRIPT
--- Create application user if not exists
+-- Create application user if not exists; always ALTER to ensure password is current
 DO \$\$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_catalog.pg_user WHERE usename = '${app_db_username}') THEN
@@ -182,6 +184,7 @@ BEGIN
   END IF;
 END
 \$\$;
+ALTER USER ${app_db_username} WITH PASSWORD '${app_db_password}';
 
 -- Grant privileges to application user
 GRANT CONNECT ON DATABASE ${rds_database_name} TO ${app_db_username};
@@ -190,7 +193,7 @@ GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${app_db_username};
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO ${app_db_username};
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO ${app_db_username};
 
--- Create read-only user if not exists
+-- Create read-only user if not exists; always ALTER to ensure password is current
 DO \$\$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_catalog.pg_user WHERE usename = 'read_only') THEN
@@ -198,6 +201,7 @@ BEGIN
   END IF;
 END
 \$\$;
+ALTER USER read_only WITH PASSWORD '${db_read_only_password}';
 
 -- Grant read-only privileges to read_only user
 GRANT CONNECT ON DATABASE ${rds_database_name} TO read_only;

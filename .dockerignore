@@ -17,7 +17,8 @@ yarn.lock
 # Development files
 .env*
 !.env.example
-*.csv
+# Anchored to repo root so fixture data inside database/seeders/ is not skipped.
+/*.csv
 *.log
 npm-debug.log
 yarn-error.log

@@ -97,23 +97,23 @@ module "rds_security_group" {
     }
     ],
     [
-      for security_group_id in var.rds_additional_ingress_security_group_ids : {
+      for entry in var.rds_additional_ingress_security_group_ids : {
         from_port                = var.db_port
         to_port                  = var.db_port
         protocol                 = "tcp"
-        source_security_group_id = security_group_id
-        description              = "Allow database access from additional security group ${security_group_id}"
+        source_security_group_id = entry.security_group_id
+        description              = entry.description
       }
     ]
   )
 
   ingress_with_cidr_blocks = [
-    for cidr in var.rds_additional_ingress_cidrs : {
+    for entry in var.rds_additional_ingress_cidrs : {
       from_port   = var.db_port
       to_port     = var.db_port
       protocol    = "tcp"
-      cidr_blocks = cidr
-      description = "Allow database access from ${cidr}"
+      cidr_blocks = entry.cidr
+      description = entry.description
     }
   ]
 

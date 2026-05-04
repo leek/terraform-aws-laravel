@@ -34,3 +34,8 @@ output "app_cloudfront_distribution_id" {
   description = "ID of the app CloudFront distribution, if enabled"
   value       = var.enable_cloudfront_app ? aws_cloudfront_distribution.app[0].id : ""
 }
+
+output "app_cloudfront_distribution_hosted_zone_id" {
+  description = "Hosted zone ID for the app CloudFront distribution (always Z2FDTNDATAQYW2 when present); empty otherwise"
+  value       = var.enable_cloudfront_app ? aws_cloudfront_distribution.app[0].hosted_zone_id : ""
+}

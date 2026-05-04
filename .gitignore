@@ -22,12 +22,28 @@ yarn-error.log
 /public/*.sql
 /storage/*.key
 /storage/pail
+/storage/app/preserved-tables
+/storage/debugbar/*.json
+/storage/logs/*.log
 .env
 .env.backup
 .env.staging
 .env.production
+.envrc
 Homestead.json
 Homestead.yaml
+
+# FrankenPHP / Caddy local-run artifacts
+**/caddy
+frankenphp
+frankenphp-worker.php
+
+# Vendored composer packages with their own nested vendor/
+/vendor-src/*/*/vendor
+
+# Database / data dump artifacts (root-anchored to keep test fixtures intact)
+/*.sql
+/*.sqlite
 
 # Local Makefile config
 Makefile.config

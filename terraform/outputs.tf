@@ -86,6 +86,11 @@ output "app_cloudfront_distribution_id" {
   value       = module.load_balancer.app_cloudfront_distribution_id
 }
 
+output "app_cloudfront_distribution_hosted_zone_id" {
+  description = "Hosted zone ID of the app CloudFront distribution (for Route53 alias targets)"
+  value       = module.load_balancer.app_cloudfront_distribution_hosted_zone_id
+}
+
 # Certificates
 output "certificate_arn" {
   description = "ARN of the ACM certificate ready for dependent resources, or empty if validation is deferred"
@@ -396,6 +401,27 @@ output "redis_connection_info" {
   value       = module.configuration.redis_connection_info
 }
 
+# SMS (conditional outputs)
+output "sms_sns_topic_arn" {
+  description = "ARN of the SMS events SNS topic, if enable_sms = true"
+  value       = var.enable_sms ? module.sms[0].sns_topic_arn : ""
+}
+
+output "sms_configuration_set_name" {
+  description = "Name of the SMS configuration set, if enable_sms = true"
+  value       = var.enable_sms ? module.sms[0].configuration_set_name : ""
+}
+
+output "sms_two_way_channel_role_arn" {
+  description = "ARN of the IAM role assumed by sms-voice.amazonaws.com, if enable_sms = true"
+  value       = var.enable_sms ? module.sms[0].two_way_channel_role_arn : ""
+}
+
+output "sms_webhook_url" {
+  description = "Webhook URL the SNS subscription delivers SMS events to"
+  value       = var.enable_sms ? module.sms[0].webhook_url : ""
+}
+
 # Bastion (conditional outputs)
 output "bastion_public_ip" {
   description = "Public IP of the bastion host"
@@ -415,4 +441,61 @@ output "database_tunnel_command" {
 output "redis_tunnel_command" {
   description = "Redis tunnel command via bastion"
   value       = var.enable_bastion ? "ssh -i ~/.ssh/${var.ec2_key_name}.pem -L 6379:${module.cache.redis_endpoint}:6379 ec2-user@${module.bastion[0].public_ip}" : "Bastion disabled - use VPN or direct access"
+}
+
+# Aggregated DNS records for external-DNS (e.g. Cloudflare) operation.
+# Useful when manage_route53_dns = false. Combines ALB, CloudFront, SES,
+# and certificate validation records into a single map for templating.
+output "cloudflare_dns_records" {
+  description = "Map of DNS records the application needs when DNS is managed externally (Cloudflare, etc.)"
+  value = {
+    application = {
+      alb_cname = {
+        name  = var.domain_name
+        type  = "CNAME"
+        value = module.load_balancer.alb_dns_name
+      }
+      cloudfront_cname = module.load_balancer.app_cloudfront_distribution_domain != "" ? {
+        name  = var.domain_name
+        type  = "CNAME"
+        value = module.load_balancer.app_cloudfront_distribution_domain
+      } : null
+    }
+    certificate_validation        = module.certificates.certificate_validation_records
+    vanity_certificate_validation = module.certificates.vanity_domain_validation_records
+    ses = var.enable_ses ? {
+      verification = {
+        name  = "_amazonses.${var.domain_name}"
+        type  = "TXT"
+        value = module.email[0].ses_verification_token
+      }
+      dkim = [
+        for token in module.email[0].ses_dkim_tokens : {
+          name  = "${token}._domainkey.${var.domain_name}"
+          type  = "CNAME"
+          value = "${token}.dkim.amazonses.com"
+        }
+      ]
+      mail_from_mx = module.email[0].ses_mail_from_domain != "" ? {
+        name  = module.email[0].ses_mail_from_domain
+        type  = "MX"
+        value = "10 ${module.email[0].ses_mail_from_mx_value}"
+      } : null
+      mail_from_spf = module.email[0].ses_mail_from_domain != "" ? {
+        name  = module.email[0].ses_mail_from_domain
+        type  = "TXT"
+        value = module.email[0].ses_mail_from_spf_value
+      } : null
+      root_spf = {
+        name  = var.domain_name
+        type  = "TXT"
+        value = module.email[0].ses_root_spf_value
+      }
+      dmarc = var.dmarc_record != "" ? {
+        name  = "_dmarc.${var.domain_name}"
+        type  = "TXT"
+        value = var.dmarc_record
+      } : null
+    } : null
+  }
 }

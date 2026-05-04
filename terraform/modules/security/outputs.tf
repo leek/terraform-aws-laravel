@@ -1,62 +1,62 @@
 # KMS Outputs
 output "parameter_store_kms_key_id" {
   description = "KMS key ID for Parameter Store encryption"
-  value       = aws_kms_key.parameter_store.key_id
+  value       = aws_kms_key.main["parameter_store"].key_id
 }
 
 output "parameter_store_kms_key_arn" {
   description = "KMS key ARN for Parameter Store encryption"
-  value       = aws_kms_key.parameter_store.arn
+  value       = aws_kms_key.main["parameter_store"].arn
 }
 
 output "rds_kms_key_id" {
   description = "KMS key ID for RDS encryption"
-  value       = aws_kms_key.rds.key_id
+  value       = aws_kms_key.main["rds"].key_id
 }
 
 output "rds_kms_key_arn" {
   description = "KMS key ARN for RDS encryption"
-  value       = aws_kms_key.rds.arn
+  value       = aws_kms_key.main["rds"].arn
 }
 
 output "sqs_kms_key_id" {
   description = "KMS key ID for SQS encryption"
-  value       = aws_kms_key.sqs.key_id
+  value       = aws_kms_key.main["sqs"].key_id
 }
 
 output "sqs_kms_key_arn" {
   description = "KMS key ARN for SQS encryption"
-  value       = aws_kms_key.sqs.arn
+  value       = aws_kms_key.main["sqs"].arn
 }
 
 output "s3_filesystem_kms_key_id" {
   description = "KMS key ID for S3 filesystem encryption"
-  value       = aws_kms_key.s3_filesystem.key_id
+  value       = aws_kms_key.main["s3_filesystem"].key_id
 }
 
 output "s3_filesystem_kms_key_arn" {
   description = "KMS key ARN for S3 filesystem encryption"
-  value       = aws_kms_key.s3_filesystem.arn
+  value       = aws_kms_key.main["s3_filesystem"].arn
 }
 
 output "backup_kms_key_id" {
   description = "KMS key ID for AWS Backup encryption"
-  value       = aws_kms_key.backup.key_id
+  value       = aws_kms_key.main["backup"].key_id
 }
 
 output "backup_kms_key_arn" {
   description = "KMS key ARN for AWS Backup encryption"
-  value       = aws_kms_key.backup.arn
+  value       = aws_kms_key.main["backup"].arn
 }
 
 output "cloudwatch_logs_kms_key_id" {
   description = "KMS key ID for CloudWatch Logs encryption"
-  value       = aws_kms_key.cloudwatch_logs.key_id
+  value       = aws_kms_key.main["cloudwatch_logs"].key_id
 }
 
 output "cloudwatch_logs_kms_key_arn" {
   description = "KMS key ARN for CloudWatch Logs encryption"
-  value       = aws_kms_key.cloudwatch_logs.arn
+  value       = aws_kms_key.main["cloudwatch_logs"].arn
 }
 
 # IAM Outputs

@@ -84,6 +84,12 @@ variable "enable_bot_control" {
   default     = false
 }
 
+variable "bot_control_excluded_path_prefixes" {
+  description = "URI path prefixes that bypass Bot Control inspection (cost saver for API endpoints that don't need browser fingerprinting)"
+  type        = list(string)
+  default     = []
+}
+
 variable "rate_limit_general" {
   description = "General WAF request rate limit per IP over a 5-minute window"
   type        = number
@@ -159,4 +165,10 @@ variable "cloudfront_app_price_class" {
   description = "CloudFront price class for the app distribution"
   type        = string
   default     = "PriceClass_100"
+}
+
+variable "cloudfront_web_acl_arn" {
+  description = "ARN of a CLOUDFRONT-scope WAF Web ACL to associate with the app CloudFront distribution. Leave empty to skip."
+  type        = string
+  default     = ""
 }
