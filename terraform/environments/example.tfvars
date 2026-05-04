@@ -19,6 +19,20 @@ environment = "production"
 # Your application's domain name
 domain_name = "example.com"
 
+# DNS ownership:
+# - true: Terraform manages Route53 records and waits for ACM validation.
+# - false: DNS is managed externally; first apply outputs ACM/SES DNS records.
+# manage_route53_dns = true
+
+# Optional existing ACM certificates. Leave empty to let Terraform request them.
+# acm_certificate_arn        = ""
+# vpn_server_certificate_arn = ""
+
+# Optional override. Defaults to manage_route53_dns.
+# For external DNS, leave unset/false for the first apply, create the output DNS
+# records with your provider, then set true and apply again.
+# wait_for_acm_validation = true
+
 # Laravel application key (generate with: php artisan key:generate --show)
 # IMPORTANT: Keep this secret! Consider using environment variables or a secrets manager.
 app_key = "base64:YOUR_APP_KEY_HERE"

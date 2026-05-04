@@ -245,25 +245,64 @@ The included Dockerfile uses an optimized multi-stage build that:
 
 ### DNS Ownership
 
-Route53 remains the default, but DNS can be managed externally:
+Route53 remains the default. With Route53-managed DNS, Terraform creates ACM/SES
+records, waits for ACM validation, and creates HTTPS listeners in one apply.
+
+DNS can also be managed externally:
 
 ```hcl
 manage_route53_dns = false
 ```
 
-When Route53 management is disabled, Terraform skips DNS writes and exposes ACM/SES validation records through outputs such as `certificate_domain_validation_options`, `vanity_domain_validation_records`, and `ses_dns_records`.
+When Route53 management is disabled, `wait_for_acm_validation` defaults to `false`.
+That first apply requests ACM certificates, exposes DNS records through outputs, and
+keeps certificate-dependent resources deferred until validation is ready. The ALB
+uses an HTTP listener during this discovery apply so Terraform can finish cleanly.
+Deferred resources include the HTTPS listener, S3 CloudFront CDN, Client VPN, and
+vanity-domain SNI attachments.
+
+Create these records with your DNS provider:
+
+```bash
+terraform output certificate_domain_validation_options
+terraform output certificate_validation_records
+terraform output vpn_certificate_domain_validation_options
+terraform output vpn_certificate_validation_records
+terraform output vanity_domain_validation_records
+terraform output ses_dns_records
+```
+
+Then enable validation and apply again:
+
+```hcl
+manage_route53_dns      = false
+wait_for_acm_validation = true
+```
+
+If you already have issued ACM certificates, provide them and Terraform can create
+certificate-dependent resources immediately:
+
+```hcl
+manage_route53_dns         = false
+acm_certificate_arn        = "arn:aws:acm:us-east-1:123456789012:certificate/..."
+vpn_server_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/..."
+```
 
 Vanity domains can be redirected through the ALB with their own ACM certificates:
 
 ```hcl
 vanity_domains = [
   {
-    domain        = "legacy-example.com"
-    redirect_host = "example.com"
-    redirect_path = "/"
+    domain          = "legacy-example.com"
+    redirect_host   = "example.com"
+    redirect_path   = "/"
+    certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/..."
   }
 ]
 ```
+
+When `certificate_arn` is omitted for a vanity domain, Terraform requests a
+certificate and exposes its validation records in `vanity_domain_validation_records`.
 
 ### Application Server Mode
 

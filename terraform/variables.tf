@@ -62,12 +62,31 @@ variable "route53_zone_id" {
   default     = ""
 }
 
+variable "wait_for_acm_validation" {
+  description = "Wait for ACM DNS validation before creating certificate-dependent resources. Defaults to manage_route53_dns."
+  type        = bool
+  default     = null
+}
+
+variable "acm_certificate_arn" {
+  description = "Existing ACM certificate ARN for the primary app domain. Empty requests one through this module."
+  type        = string
+  default     = ""
+}
+
+variable "vpn_server_certificate_arn" {
+  description = "Existing ACM certificate ARN for the Client VPN server domain. Empty requests one through this module."
+  type        = string
+  default     = ""
+}
+
 variable "vanity_domains" {
   description = "External vanity domains to certificate and redirect through the ALB"
   type = list(object({
-    domain        = string
-    redirect_host = string
-    redirect_path = optional(string, "/")
+    domain          = string
+    redirect_host   = string
+    redirect_path   = optional(string, "/")
+    certificate_arn = optional(string, "")
   }))
   default = []
 }

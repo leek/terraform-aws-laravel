@@ -23,6 +23,17 @@ output "ses_dkim_tokens" {
   value       = aws_ses_domain_dkim.main.dkim_tokens
 }
 
+output "ses_test_domain_verification_records" {
+  description = "TXT records required to verify SES test domains"
+  value = [
+    for index, domain in var.test_email_domains : {
+      name  = "_amazonses.${domain}"
+      type  = "TXT"
+      value = aws_ses_domain_identity.test_domains[index].verification_token
+    }
+  ]
+}
+
 output "ses_mail_from_domain" {
   description = "Custom MAIL FROM domain, or empty string when disabled"
   value       = local.mail_from_enabled ? local.mail_from_domain : ""

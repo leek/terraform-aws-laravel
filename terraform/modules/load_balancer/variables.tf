@@ -38,6 +38,12 @@ variable "certificate_arn" {
   type        = string
 }
 
+variable "enable_https_listener" {
+  description = "Create the HTTPS listener and redirect HTTP to HTTPS"
+  type        = bool
+  default     = true
+}
+
 variable "alb_logs_bucket_name" {
   description = "ALB logs S3 bucket name"
   type        = string

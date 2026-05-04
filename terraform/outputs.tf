@@ -88,8 +88,13 @@ output "app_cloudfront_distribution_id" {
 
 # Certificates
 output "certificate_arn" {
-  description = "ARN of the ACM certificate"
+  description = "ARN of the ACM certificate ready for dependent resources, or empty if validation is deferred"
   value       = module.certificates.certificate_arn
+}
+
+output "requested_certificate_arn" {
+  description = "ARN of the requested primary ACM certificate, even when validation is deferred"
+  value       = module.certificates.requested_certificate_arn
 }
 
 output "certificate_domain_validation_options" {
@@ -97,14 +102,44 @@ output "certificate_domain_validation_options" {
   value       = module.certificates.certificate_domain_validation_options
 }
 
+output "certificate_validation_records" {
+  description = "Simplified DNS validation records for the primary certificate"
+  value       = module.certificates.certificate_validation_records
+}
+
 output "vpn_certificate_domain_validation_options" {
   description = "DNS validation records for the VPN certificate"
   value       = module.certificates.vpn_certificate_domain_validation_options
 }
 
+output "vpn_certificate_validation_records" {
+  description = "Simplified DNS validation records for the VPN certificate"
+  value       = module.certificates.vpn_certificate_validation_records
+}
+
+output "vpn_server_certificate_arn" {
+  description = "ARN of the VPN server ACM certificate ready for dependent resources, or empty if validation is deferred"
+  value       = module.certificates.vpn_server_certificate_arn
+}
+
+output "requested_vpn_server_certificate_arn" {
+  description = "ARN of the requested VPN server ACM certificate, even when validation is deferred"
+  value       = module.certificates.requested_vpn_server_certificate_arn
+}
+
 output "vanity_domain_validation_records" {
   description = "DNS validation records for vanity domain certificates"
   value       = module.certificates.vanity_domain_validation_records
+}
+
+output "vanity_domain_certificate_arns" {
+  description = "Map of vanity domain to ACM certificate ARN ready for dependent resources"
+  value       = module.certificates.vanity_domain_certificate_arns
+}
+
+output "requested_vanity_domain_certificate_arns" {
+  description = "Map of vanity domain to requested ACM certificate ARN, even when validation is deferred"
+  value       = module.certificates.requested_vanity_domain_certificate_arns
 }
 
 # Container Registry
@@ -329,6 +364,7 @@ output "ses_dns_records" {
         value = "${token}.dkim.amazonses.com"
       }
     ]
+    test_domains = module.email[0].ses_test_domain_verification_records
     mail_from = module.email[0].ses_mail_from_domain != "" ? {
       mx = {
         name  = module.email[0].ses_mail_from_domain

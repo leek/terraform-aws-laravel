@@ -21,6 +21,10 @@ locals {
   route53_zone_id = var.route53_zone_id != "" ? var.route53_zone_id : (
     var.manage_route53_dns ? data.aws_route53_zone.main[0].zone_id : ""
   )
+  wait_for_acm_validation = coalesce(var.wait_for_acm_validation, var.manage_route53_dns)
+
+  primary_certificate_ready = var.acm_certificate_arn != "" || local.wait_for_acm_validation
+  vpn_certificate_ready     = var.vpn_server_certificate_arn != "" || local.wait_for_acm_validation
 
   # Workspace validation mapping
   workspace_environment_map = {
@@ -113,13 +117,21 @@ module "networking" {
 module "certificates" {
   source = "./modules/certificates"
 
-  app_name               = var.app_name
-  environment            = var.environment
-  domain_name            = var.domain_name
-  route53_zone_id        = local.route53_zone_id
-  manage_route53_records = var.manage_route53_dns
-  vanity_domains         = [for vanity_domain in var.vanity_domains : { domain = vanity_domain.domain }]
-  common_tags            = local.common_tags
+  app_name                   = var.app_name
+  environment                = var.environment
+  domain_name                = var.domain_name
+  route53_zone_id            = local.route53_zone_id
+  certificate_arn            = var.acm_certificate_arn
+  vpn_server_certificate_arn = var.vpn_server_certificate_arn
+  manage_route53_records     = var.manage_route53_dns
+  wait_for_validation        = local.wait_for_acm_validation
+  vanity_domains = [
+    for vanity_domain in var.vanity_domains : {
+      domain          = vanity_domain.domain
+      certificate_arn = vanity_domain.certificate_arn
+    }
+  ]
+  common_tags = local.common_tags
 }
 
 # Container Registry
@@ -219,7 +231,7 @@ module "storage" {
   caller_identity_account_id = data.aws_caller_identity.current.account_id
   s3_filesystem_kms_key_arn  = module.security.s3_filesystem_kms_key_arn
   certificate_arn            = module.certificates.certificate_arn
-  enable_cloudfront          = var.enable_cloudfront
+  enable_cloudfront          = var.enable_cloudfront && local.primary_certificate_ready
   common_tags                = local.common_tags
 }
 
@@ -277,6 +289,7 @@ module "load_balancer" {
   public_subnets                    = module.networking.public_subnets
   alb_security_group_id             = module.networking.alb_security_group_id
   certificate_arn                   = module.certificates.certificate_arn
+  enable_https_listener             = local.primary_certificate_ready
   alb_logs_bucket_name              = module.storage.alb_logs_bucket_name
   enable_access_logs                = var.enable_alb_access_logs
   blocked_uri_patterns              = var.blocked_uri_patterns
@@ -297,8 +310,9 @@ module "load_balancer" {
       domain          = vanity_domain.domain
       redirect_host   = vanity_domain.redirect_host
       redirect_path   = vanity_domain.redirect_path
-      certificate_arn = module.certificates.vanity_domain_certificate_arns[vanity_domain.domain]
+      certificate_arn = vanity_domain.certificate_arn != "" ? vanity_domain.certificate_arn : module.certificates.vanity_domain_certificate_arns[vanity_domain.domain]
     }
+    if local.wait_for_acm_validation || vanity_domain.certificate_arn != ""
   ]
   common_tags = local.common_tags
 }
@@ -485,7 +499,7 @@ resource "aws_security_group_rule" "bastion_to_rds" {
 
 # Client VPN - Optional
 module "client_vpn" {
-  count  = var.enable_client_vpn ? 1 : 0
+  count  = var.enable_client_vpn && local.vpn_certificate_ready ? 1 : 0
   source = "./modules/client_vpn"
 
   name                           = "${var.app_name}-${var.environment}-vpn"

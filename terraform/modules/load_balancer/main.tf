@@ -360,6 +360,11 @@ resource "aws_wafv2_web_acl" "main" {
 
 locals {
   domain_starts_with_www = startswith(lower(var.domain_name), "www.")
+  vanity_domains_by_domain = {
+    for index, vanity_domain in var.vanity_domains : vanity_domain.domain => merge(vanity_domain, {
+      priority = 10 + index
+    })
+  }
 }
 
 resource "aws_lb" "main" {
@@ -416,19 +421,25 @@ resource "aws_lb_target_group" "main" {
   })
 }
 
-# HTTP Listener (redirect to HTTPS)
+# HTTP Listener (redirects to HTTPS when a usable certificate exists, otherwise
+# forwards to the target group so external-DNS certificate discovery can apply).
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
 
   default_action {
-    type = "redirect"
+    type             = var.enable_https_listener ? "redirect" : "forward"
+    target_group_arn = var.enable_https_listener ? null : aws_lb_target_group.main.arn
 
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
+    dynamic "redirect" {
+      for_each = var.enable_https_listener ? [1] : []
+
+      content {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
     }
   }
 
@@ -437,6 +448,8 @@ resource "aws_lb_listener" "http" {
 
 # HTTPS Listener
 resource "aws_lb_listener" "https" {
+  count = var.enable_https_listener ? 1 : 0
+
   load_balancer_arn = aws_lb.main.arn
   port              = "443"
   protocol          = "HTTPS"
@@ -452,10 +465,15 @@ resource "aws_lb_listener" "https" {
   tags       = var.common_tags
 }
 
+moved {
+  from = aws_lb_listener.https
+  to   = aws_lb_listener.https[0]
+}
+
 # HTTPS Listener Rule - Redirect www to non-www
 resource "aws_lb_listener_rule" "redirect_www" {
-  count        = local.domain_starts_with_www ? 0 : 1
-  listener_arn = aws_lb_listener.https.arn
+  count        = var.enable_https_listener && !local.domain_starts_with_www ? 1 : 0
+  listener_arn = aws_lb_listener.https[0].arn
   priority     = 1
 
   action {
@@ -482,18 +500,18 @@ resource "aws_lb_listener_rule" "redirect_www" {
 
 # Attach each vanity domain certificate to the HTTPS listener (SNI)
 resource "aws_lb_listener_certificate" "vanity" {
-  for_each = { for vanity_domain in var.vanity_domains : vanity_domain.domain => vanity_domain }
+  for_each = var.enable_https_listener ? local.vanity_domains_by_domain : {}
 
-  listener_arn    = aws_lb_listener.https.arn
+  listener_arn    = aws_lb_listener.https[0].arn
   certificate_arn = each.value.certificate_arn
 }
 
 # Redirect vanity domain traffic to the configured target
 resource "aws_lb_listener_rule" "vanity_redirect" {
-  for_each = { for vanity_domain in var.vanity_domains : vanity_domain.domain => vanity_domain }
+  for_each = var.enable_https_listener ? local.vanity_domains_by_domain : {}
 
-  listener_arn = aws_lb_listener.https.arn
-  priority     = 10 + index(var.vanity_domains, each.value)
+  listener_arn = aws_lb_listener.https[0].arn
+  priority     = each.value.priority
 
   action {
     type = "redirect"
