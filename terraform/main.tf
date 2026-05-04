@@ -230,6 +230,7 @@ module "storage" {
   aws_region                 = var.aws_region
   caller_identity_account_id = data.aws_caller_identity.current.account_id
   s3_filesystem_kms_key_arn  = module.security.s3_filesystem_kms_key_arn
+  cloudtrail_kms_key_arn     = module.security.cloudtrail_kms_key_arn
   certificate_arn            = module.certificates.certificate_arn
   enable_cloudfront          = var.enable_cloudfront && local.primary_certificate_ready
   common_tags                = local.common_tags
@@ -248,6 +249,8 @@ module "monitoring" {
   healthcheck_alarm_emails   = var.healthcheck_alarm_emails
   enable_cloudtrail          = var.enable_cloudtrail
   cloudwatch_logs_kms_key_id = module.security.cloudwatch_logs_kms_key_arn
+  cloudtrail_kms_key_arn     = module.security.cloudtrail_kms_key_arn
+  sns_kms_key_id             = module.security.sns_kms_key_arn
   log_retention_days         = var.log_retention_days
   common_tags                = local.common_tags
 }
@@ -272,6 +275,7 @@ module "email" {
   enable_event_destination         = var.ses_enable_event_destination
   event_matching_types             = var.ses_event_matching_types
   event_notification_emails        = var.ses_event_notification_emails
+  sns_kms_key_id                   = module.security.sns_kms_key_arn
   enable_account_suppression       = var.ses_enable_account_suppression
   suppressed_reasons               = var.ses_suppressed_reasons
   common_tags                      = local.common_tags
@@ -292,6 +296,7 @@ module "load_balancer" {
   enable_https_listener              = local.primary_certificate_ready
   alb_logs_bucket_name               = module.storage.alb_logs_bucket_name
   enable_access_logs                 = var.enable_alb_access_logs
+  cloudwatch_logs_kms_key_id         = module.security.cloudwatch_logs_kms_key_arn
   blocked_uri_patterns               = var.blocked_uri_patterns
   enable_bot_control                 = var.enable_bot_control
   bot_control_excluded_path_prefixes = var.bot_control_excluded_path_prefixes
@@ -302,6 +307,7 @@ module "load_balancer" {
   health_check_path                  = var.alb_health_check_path
   enable_stickiness                  = var.enable_alb_stickiness
   ssl_policy                         = var.alb_ssl_policy
+  waf_log_retention_days             = var.log_retention_days
   enable_cloudfront_app              = var.enable_cloudfront_app
   cloudfront_app_aliases             = var.cloudfront_app_aliases
   cloudfront_app_certificate_arn     = var.cloudfront_app_certificate_arn
@@ -547,6 +553,7 @@ module "sms" {
   default_message_type                      = var.aws_sms_default_message_type
   subscription_confirmation_timeout_minutes = var.aws_sms_subscription_confirmation_timeout_minutes
   caller_identity_account_id                = data.aws_caller_identity.current.account_id
+  sns_kms_key_id                            = module.security.sns_kms_key_arn
   common_tags                               = local.common_tags
 }
 

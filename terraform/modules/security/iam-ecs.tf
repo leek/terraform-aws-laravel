@@ -162,7 +162,7 @@ resource "aws_iam_role_policy" "ecs_task_role_policy" {
           "ses:SendEmail",
           "ses:SendRawEmail"
         ]
-        Resource = "*"
+        Resource = "arn:aws:ses:${var.aws_region}:${var.caller_identity_account_id}:identity/*"
       }
     ]
   })

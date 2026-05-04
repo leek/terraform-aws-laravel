@@ -102,7 +102,8 @@ resource "aws_route53_record" "test_domain_verification" {
 resource "aws_sns_topic" "events" {
   count = var.enable_event_destination ? 1 : 0
 
-  name = "${local.name_prefix}-ses-events"
+  name              = "${local.name_prefix}-ses-events"
+  kms_master_key_id = var.sns_kms_key_id
 
   tags = merge(var.common_tags, {
     Name = "${local.name_prefix}-ses-events"

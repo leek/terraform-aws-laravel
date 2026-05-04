@@ -41,7 +41,8 @@ locals {
 # ----------------------------------------------------------------------------
 
 resource "aws_sns_topic" "events" {
-  name = "${local.name_prefix}-sms-events"
+  name              = "${local.name_prefix}-sms-events"
+  kms_master_key_id = var.sns_kms_key_id
 
   tags = merge(var.common_tags, {
     Name = "${local.name_prefix}-sms-events"

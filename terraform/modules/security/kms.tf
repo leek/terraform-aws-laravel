@@ -73,10 +73,105 @@ locals {
         ]
       })
     }
+    cloudtrail = {
+      description = "KMS key for ${var.app_name}-${var.environment} CloudTrail log encryption"
+      alias_name  = "alias/${var.app_name}-${var.environment}-cloudtrail"
+      tag_name    = "${var.app_name}-${var.environment}-cloudtrail-key"
+      policy = jsonencode({
+        Version = "2012-10-17"
+        Statement = [
+          {
+            Sid    = "Enable IAM User Permissions"
+            Effect = "Allow"
+            Principal = {
+              AWS = "arn:aws:iam::${var.caller_identity_account_id}:root"
+            }
+            Action   = "kms:*"
+            Resource = "*"
+          },
+          {
+            Sid    = "Allow CloudTrail to encrypt logs"
+            Effect = "Allow"
+            Principal = {
+              Service = "cloudtrail.amazonaws.com"
+            }
+            Action = [
+              "kms:DescribeKey",
+              "kms:GenerateDataKey*"
+            ]
+            Resource = "*"
+            Condition = {
+              StringLike = {
+                "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:${var.caller_identity_account_id}:trail/${var.app_name}-${var.environment}-cloudtrail"
+              }
+            }
+          },
+          {
+            Sid    = "Allow CloudTrail to use S3 bucket encryption"
+            Effect = "Allow"
+            Principal = {
+              Service = "cloudtrail.amazonaws.com"
+            }
+            Action = [
+              "kms:Decrypt",
+              "kms:DescribeKey",
+              "kms:GenerateDataKey*"
+            ]
+            Resource = "*"
+            Condition = {
+              StringEquals = {
+                "aws:SourceAccount" = var.caller_identity_account_id
+              }
+            }
+          }
+        ]
+      })
+    }
     backup = {
       description = "KMS key for ${var.app_name}-${var.environment} AWS Backup encryption"
       alias_name  = "alias/${var.app_name}-${var.environment}-backup"
       tag_name    = "${var.app_name}-${var.environment}-backup-key"
+    }
+    secrets = {
+      description = "KMS key for ${var.app_name}-${var.environment} Secrets Manager encryption"
+      alias_name  = "alias/${var.app_name}-${var.environment}-secrets"
+      tag_name    = "${var.app_name}-${var.environment}-secrets-key"
+    }
+    sns = {
+      description = "KMS key for ${var.app_name}-${var.environment} SNS topic encryption"
+      alias_name  = "alias/${var.app_name}-${var.environment}-sns"
+      tag_name    = "${var.app_name}-${var.environment}-sns-key"
+      policy = jsonencode({
+        Version = "2012-10-17"
+        Statement = [
+          {
+            Sid    = "Enable IAM User Permissions"
+            Effect = "Allow"
+            Principal = {
+              AWS = "arn:aws:iam::${var.caller_identity_account_id}:root"
+            }
+            Action   = "kms:*"
+            Resource = "*"
+          },
+          {
+            Sid    = "Allow AWS services to publish to encrypted SNS topics"
+            Effect = "Allow"
+            Principal = {
+              Service = [
+                "cloudtrail.amazonaws.com",
+                "cloudwatch.amazonaws.com",
+                "ses.amazonaws.com",
+                "sms-voice.amazonaws.com"
+              ]
+            }
+            Action = [
+              "kms:Decrypt",
+              "kms:GenerateDataKey*"
+            ]
+            Resource = "*"
+          }
+        ]
+      })
     }
     cloudwatch_logs = {
       description = "KMS key for ${var.app_name}-${var.environment} CloudWatch Logs encryption"

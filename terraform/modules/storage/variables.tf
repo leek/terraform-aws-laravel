@@ -24,6 +24,11 @@ variable "s3_filesystem_kms_key_arn" {
   type        = string
 }
 
+variable "cloudtrail_kms_key_arn" {
+  description = "ARN of the KMS key for CloudTrail S3 bucket encryption"
+  type        = string
+}
+
 variable "caller_identity_account_id" {
   description = "AWS account ID"
   type        = string

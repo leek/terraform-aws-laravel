@@ -44,6 +44,7 @@ fi
 
 # Activate virtual environment and install/upgrade diagrams
 echo "📥 Installing/updating dependencies..."
+# shellcheck source=/dev/null
 source venv/bin/activate
 pip install -q --upgrade pip
 pip install -q diagrams

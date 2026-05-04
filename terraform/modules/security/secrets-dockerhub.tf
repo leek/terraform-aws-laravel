@@ -11,6 +11,7 @@ resource "aws_secretsmanager_secret" "dockerhub" {
 
   name        = "${var.app_name}-${var.environment}-dockerhub"
   description = "Docker Hub credentials for ECS repositoryCredentials"
+  kms_key_id  = aws_kms_key.main["secrets"].arn
 
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-${var.environment}-dockerhub"
@@ -34,6 +35,12 @@ data "aws_iam_policy_document" "ecs_execution_dockerhub" {
     effect    = "Allow"
     actions   = ["secretsmanager:GetSecretValue"]
     resources = [aws_secretsmanager_secret.dockerhub[0].arn]
+  }
+
+  statement {
+    effect    = "Allow"
+    actions   = ["kms:Decrypt"]
+    resources = [aws_kms_key.main["secrets"].arn]
   }
 }
 

@@ -60,6 +60,11 @@ variable "common_tags" {
   type        = map(string)
 }
 
+variable "cloudwatch_logs_kms_key_id" {
+  description = "KMS key ID or ARN for CloudWatch Logs encryption"
+  type        = string
+}
+
 variable "enable_deletion_protection" {
   description = "Enable deletion protection for the load balancer"
   type        = bool
@@ -130,6 +135,12 @@ variable "ssl_policy" {
   description = "ALB HTTPS listener SSL policy"
   type        = string
   default     = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+}
+
+variable "waf_log_retention_days" {
+  description = "Number of days to retain WAF logs in CloudWatch Logs"
+  type        = number
+  default     = 30
 }
 
 variable "vanity_domains" {

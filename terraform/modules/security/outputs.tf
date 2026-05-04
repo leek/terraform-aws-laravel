@@ -39,6 +39,11 @@ output "s3_filesystem_kms_key_arn" {
   value       = aws_kms_key.main["s3_filesystem"].arn
 }
 
+output "cloudtrail_kms_key_arn" {
+  description = "KMS key ARN for CloudTrail log encryption"
+  value       = aws_kms_key.main["cloudtrail"].arn
+}
+
 output "backup_kms_key_id" {
   description = "KMS key ID for AWS Backup encryption"
   value       = aws_kms_key.main["backup"].key_id
@@ -57,6 +62,16 @@ output "cloudwatch_logs_kms_key_id" {
 output "cloudwatch_logs_kms_key_arn" {
   description = "KMS key ARN for CloudWatch Logs encryption"
   value       = aws_kms_key.main["cloudwatch_logs"].arn
+}
+
+output "secrets_kms_key_arn" {
+  description = "KMS key ARN for Secrets Manager encryption"
+  value       = aws_kms_key.main["secrets"].arn
+}
+
+output "sns_kms_key_arn" {
+  description = "KMS key ARN for SNS topic encryption"
+  value       = aws_kms_key.main["sns"].arn
 }
 
 # IAM Outputs

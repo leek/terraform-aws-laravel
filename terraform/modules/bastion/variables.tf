@@ -35,8 +35,8 @@ variable "allowed_cidr_blocks" {
   default     = []
 
   validation {
-    condition     = length(var.allowed_cidr_blocks) > 0
-    error_message = "At least one CIDR block must be specified for SSH access. Never use 0.0.0.0/0 in production."
+    condition     = length(var.allowed_cidr_blocks) > 0 && !contains(var.allowed_cidr_blocks, "0.0.0.0/0") && !contains(var.allowed_cidr_blocks, "::/0")
+    error_message = "At least one non-public CIDR block must be specified for SSH access. Do not use 0.0.0.0/0 or ::/0."
   }
 }
 

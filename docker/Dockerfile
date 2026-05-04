@@ -21,7 +21,7 @@ FROM ${COMPOSER_IMAGE} AS composer_bin
 # ========================================
 # Stage: Download Octane binaries
 # ========================================
-FROM alpine:latest AS binaries
+FROM alpine:3.22 AS binaries
 
 ARG APP_SERVER_MODE
 ARG RR_VERSION=v2025.1.4

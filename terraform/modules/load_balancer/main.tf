@@ -385,6 +385,21 @@ resource "aws_wafv2_web_acl" "main" {
   })
 }
 
+resource "aws_cloudwatch_log_group" "waf" {
+  name              = "aws-waf-logs-${var.app_name}-${var.environment}"
+  retention_in_days = var.waf_log_retention_days
+  kms_key_id        = var.cloudwatch_logs_kms_key_id
+
+  tags = merge(var.common_tags, {
+    Name = "${var.app_name}-${var.environment}-waf-logs"
+  })
+}
+
+resource "aws_wafv2_web_acl_logging_configuration" "main" {
+  log_destination_configs = [aws_cloudwatch_log_group.waf.arn]
+  resource_arn            = aws_wafv2_web_acl.main.arn
+}
+
 # ========================================
 # Application Load Balancer
 # ========================================

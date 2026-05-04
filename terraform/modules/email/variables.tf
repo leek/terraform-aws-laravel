@@ -96,6 +96,12 @@ variable "event_notification_emails" {
   default     = []
 }
 
+variable "sns_kms_key_id" {
+  description = "KMS key ID or alias used to encrypt SNS topics"
+  type        = string
+  default     = "alias/aws/sns"
+}
+
 variable "enable_account_suppression" {
   description = "Enable SES account-level suppression for bounced/complained recipients"
   type        = bool

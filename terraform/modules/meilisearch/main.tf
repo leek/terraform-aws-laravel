@@ -4,6 +4,7 @@
 
 resource "aws_security_group" "meilisearch" {
   name_prefix = "${var.app_name}-${var.environment}-meilisearch-"
+  description = "Security group for Meilisearch ECS service"
   vpc_id      = var.vpc_id
 
   ingress {

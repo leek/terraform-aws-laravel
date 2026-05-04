@@ -50,8 +50,19 @@ variable "cloudwatch_logs_kms_key_id" {
   type        = string
 }
 
+variable "cloudtrail_kms_key_arn" {
+  description = "KMS key ARN for CloudTrail log encryption"
+  type        = string
+}
+
 variable "log_retention_days" {
   description = "Number of days to retain ECS CloudWatch logs. 30 default suits HIPAA-friendly templates; raise for longer audits."
   type        = number
   default     = 30
+}
+
+variable "sns_kms_key_id" {
+  description = "KMS key ID or alias used to encrypt SNS topics"
+  type        = string
+  default     = "alias/aws/sns"
 }

@@ -57,6 +57,12 @@ variable "caller_identity_account_id" {
   type        = string
 }
 
+variable "sns_kms_key_id" {
+  description = "KMS key ID or alias used to encrypt SNS topics"
+  type        = string
+  default     = "alias/aws/sns"
+}
+
 variable "common_tags" {
   description = "Common tags applied to all resources"
   type        = map(string)
