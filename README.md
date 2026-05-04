@@ -27,12 +27,12 @@ This isn't just another Laravel deployment template - it's a **production-grade,
   - RDS support: MySQL, MariaDB, PostgreSQL
   - Aurora support: Aurora MySQL, Aurora PostgreSQL (with Serverless v2 option)
   - Read replicas for RDS, reader endpoints for Aurora
-- **ElastiCache Redis** - Session and cache storage (single-node configuration)
+- **ElastiCache Redis** - TLS/AUTH-protected replication group for sessions and cache
 - **Application Load Balancer** - HTTPS traffic routing with AWS WAF
 - **S3** - File storage for Laravel filesystem
 - **SQS** - Queue management for Laravel jobs
 - **CloudWatch** - Centralized logging and monitoring
-- **Route53** - DNS management and health checks
+- **Route53 or external DNS** - Optional DNS management with ACM/SES validation outputs
 
 ### Optional Features
 - **Aurora Serverless v2** - Auto-scaling database with per-second billing (optional)
@@ -156,7 +156,7 @@ This approach ensures consistency across all services while using the same codeb
 ## Prerequisites
 
 1. **AWS Account** with appropriate permissions
-2. **Terraform** >= 1.0
+2. **Terraform** >= 1.5
 3. **AWS CLI** configured with credentials
 4. **Domain name** registered (can be managed elsewhere)
 5. **Laravel application** with PHP 8.4+ ready to containerize
@@ -190,7 +190,7 @@ github_repo = "your-repo"
 
 # Database credentials (use strong random passwords)
 app_db_password       = "STRONG_RANDOM_PASSWORD"
-db_reporting_password = "STRONG_RANDOM_PASSWORD"
+db_read_only_password = "STRONG_RANDOM_PASSWORD"
 ```
 
 ### 3. Initialize and Deploy
@@ -220,17 +220,13 @@ The Terraform configuration includes built-in workspace validation to prevent ac
 After infrastructure is created:
 
 ```bash
-# Build and push your Docker image (uses optimized multi-stage build)
-docker build -f docker/Dockerfile -t myapp .
-aws ecr get-login-password | docker login --username AWS --password-stdin $(terraform output -raw ecr_repository_url)
-docker tag myapp:latest $(terraform output -raw ecr_repository_url):latest
-docker push $(terraform output -raw ecr_repository_url):latest
+# Build, push, register new ECS task definitions, and update all ECS services.
+# IMAGE_TAG defaults to the current git SHA; override it for ad-hoc tags.
+make docker.production.build
+make docker.production.push
 
-# Force new ECS deployment (updates all three services: web, queue-worker, scheduler)
-CLUSTER=$(terraform output -raw ecs_cluster_name)
-aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_service_name) --force-new-deployment
-aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_queue_worker_service_name) --force-new-deployment
-aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_scheduler_service_name) --force-new-deployment
+# Optional full deploy: build, push, then run migrations as a one-off ECS task.
+make deploy.production
 ```
 
 **Docker Build Performance:**
@@ -238,11 +234,34 @@ The included Dockerfile uses an optimized multi-stage build that:
 - Caches Laravel artifacts at build time (events, routes, views, icons, Filament components)
 - Pre-installs all Octane binaries (Swoole, RoadRunner, FrankenPHP) for instant switching
 - Uses BuildKit cache mounts for Composer and NPM dependencies
+- Includes both MySQL and PostgreSQL PDO drivers by default; Chromium and GnuPG can be enabled through build args
 - Runs on PHP 8.4 Alpine Linux for minimal image size
 - Significantly reduces container startup time (typically 2-5 seconds vs 20-30 seconds)
 - Reduces image size by 30-40% compared to traditional builds
 
 ## Configuration Guide
+
+### DNS Ownership
+
+Route53 remains the default, but DNS can be managed externally:
+
+```hcl
+manage_route53_dns = false
+```
+
+When Route53 management is disabled, Terraform skips DNS writes and exposes ACM/SES validation records through outputs such as `certificate_domain_validation_options`, `vanity_domain_validation_records`, and `ses_dns_records`.
+
+Vanity domains can be redirected through the ALB with their own ACM certificates:
+
+```hcl
+vanity_domains = [
+  {
+    domain        = "legacy-example.com"
+    redirect_host = "example.com"
+    redirect_path = "/"
+  }
+]
+```
 
 ### Application Server Mode
 
@@ -297,7 +316,7 @@ db_engine_version = "10.11.9"  # Default if not specified
 
 # PostgreSQL - Advanced features, better for complex queries
 db_engine = "postgres"
-db_engine_version = "16.4"  # Default if not specified
+db_engine_version = "18.3"  # Default if not specified
 ```
 
 **Aurora Options (Advanced):**
@@ -308,7 +327,7 @@ db_engine_version = "8.0.mysql_aurora.3.07.1"  # Default if not specified
 
 # Aurora PostgreSQL - Auto-scaling, better HA, serverless option
 db_engine = "aurora-postgresql"
-db_engine_version = "16.4"  # Default if not specified
+db_engine_version = "18.3"  # Default if not specified
 ```
 
 #### RDS vs Aurora Comparison
@@ -369,6 +388,12 @@ aurora_instance_count = 2  # Creates 1 writer + 1 reader
 The infrastructure automatically configures the correct port based on engine:
 - MySQL/MariaDB/Aurora MySQL: Port 3306
 - PostgreSQL/Aurora PostgreSQL: Port 5432
+
+It also injects the matching Laravel driver into ECS:
+- MySQL/MariaDB/Aurora MySQL: `DB_CONNECTION=mysql`
+- PostgreSQL/Aurora PostgreSQL: `DB_CONNECTION=pgsql`
+
+The Docker build includes both `pdo_mysql` and `pdo_pgsql` by default so the same template supports either database engine. Set `INSTALL_PGSQL=false` only when you know a project will stay MySQL/MariaDB-only and want the smaller image.
 
 #### Migration Considerations
 
@@ -438,7 +463,7 @@ github_org  = "your-org"
 github_repo = "your-repo"
 
 app_db_password       = "..."
-db_reporting_password = "..."
+db_read_only_password = "..."
 
 # Application server mode
 app_server_mode      = "php-fpm"  # or "octane-swoole", "octane-roadrunner", or "octane-frankenphp" for better performance
@@ -490,7 +515,7 @@ github_org  = "your-org"
 github_repo = "your-repo"
 
 app_db_password       = "..."
-db_reporting_password = "..."
+db_read_only_password = "..."
 
 # Use Laravel Octane for better performance in production (choose your preferred driver)
 app_server_mode      = "octane-swoole"  # or "octane-roadrunner" or "octane-frankenphp"
@@ -529,8 +554,10 @@ db_create_read_replica       = true
 # enable_performance_insights = true
 # enable_deletion_protection  = true
 
-# Production Redis (note: currently single-node only)
-redis_node_type = "cache.t3.medium"
+# Production Redis
+redis_node_type            = "cache.t3.medium"
+redis_num_cache_nodes      = 2 # Enables Multi-AZ automatic failover
+redis_engine_version       = "7.1"
 
 # Enable production features
 enable_cloudtrail       = true
@@ -602,10 +629,11 @@ Before switching to Octane, ensure your Laravel application:
    terraform apply -var-file="environments/production.tfvars"
    ```
 
-3. Deploy your updated Docker image (with Octane installed) and force a new ECS deployment:
+3. Deploy your updated Docker image (with Octane installed):
    ```bash
    # The new tasks will automatically start with your chosen Octane driver
-   aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_service_name) --force-new-deployment
+   make docker.production.build
+   make docker.production.push
    ```
 
 ### Switching Back to PHP-FPM
@@ -620,7 +648,7 @@ If you need to revert to PHP-FPM:
 2. Apply the Terraform changes and redeploy:
    ```bash
    terraform apply -var-file="environments/production.tfvars"
-   aws ecs update-service --cluster $CLUSTER --service $(terraform output -raw ecs_service_name) --force-new-deployment
+   make docker.production.push
    ```
 
 ### Testing Your Configuration
@@ -933,9 +961,15 @@ aws macie2 list-findings
 
 ## Database Users
 
-Three database users are automatically configured for all database engines:
+Database credentials are generated/stored by Terraform. Optional bastion database bootstrap can create application/read-only users when enabled:
 
-1. **Master User** (`admin`)
+```hcl
+enable_bastion_database_bootstrap = true
+```
+
+Three database users are supported for all database engines:
+
+1. **Master User** (`admin` for MySQL/MariaDB, `postgres_admin` for PostgreSQL unless overridden)
    - Full administrative access
    - Credentials stored in AWS Secrets Manager
    - Used only for infrastructure management
@@ -943,7 +977,7 @@ Three database users are automatically configured for all database engines:
 2. **Application User** (`app_user` by default)
    - CRUD operations + migrations
    - Used by Laravel application
-   - Created automatically by bastion host
+   - Created by optional bastion database bootstrap
    - Works with MySQL, MariaDB, PostgreSQL, and Aurora
 
 3. **Reporting User** (`reporting`)
@@ -951,13 +985,13 @@ Three database users are automatically configured for all database engines:
    - For BI tools and analytics
    - Safe for external reporting tools
 
-> **Note**: User creation commands are engine-specific and handled automatically by the bastion host initialization script.
+> **Note**: User creation commands are engine-specific and handled by the optional bastion initialization script.
 
 ## Monitoring & Alerts
 
 ### Health Checks
 
-Route53 health checks monitor your application endpoint (`/up`) every 30 seconds:
+Optional Route53 health checks monitor your application endpoint (`/up`) every 30 seconds:
 
 ```hcl
 healthcheck_alarm_emails = ["ops@example.com", "team@example.com"]
@@ -1042,7 +1076,10 @@ container_memory = 4096  # 4 GB
 redis_node_type = "cache.t3.medium"  # or cache.r6g.large, etc.
 ```
 
-> **Note**: Redis is currently configured as a single-node cluster. Multi-node replication (for high availability) is not yet implemented but can be added in the future using ElastiCache Replication Groups.
+**High availability**: use 2+ cache clusters:
+```hcl
+redis_num_cache_nodes = 2
+```
 
 ### Database Scaling
 
@@ -1166,7 +1203,7 @@ aws ecs describe-services --cluster laravel-app-production --services laravel-ap
 ### Application Not Accessible
 
 1. Check ALB target health
-2. Verify Route53 DNS resolves correctly
+2. Verify DNS resolves correctly
 3. Check ACM certificate status
 4. Review WAF rules (if blocking)
 
@@ -1215,10 +1252,8 @@ aws rds restore-db-instance-from-db-snapshot \
 
 - name: Deploy to ECS
   run: |
-    docker build -t myapp .
-    docker tag myapp:latest $ECR_REPO:latest
-    docker push $ECR_REPO:latest
-    aws ecs update-service --cluster myapp-production --service myapp-production-service --force-new-deployment
+    make docker.production.build
+    make docker.production.push IMAGE_TAG=$GITHUB_SHA
 ```
 
 ## Module Structure
@@ -1244,7 +1279,7 @@ terraform/
     ├── configuration/          # SSM parameters
     ├── container_registry/     # ECR repository
     ├── database/               # Database (RDS: MySQL/MariaDB/PostgreSQL, Aurora: MySQL/PostgreSQL)
-    ├── dns/                    # Route53 records
+    ├── dns/                    # Optional Route53 records
     ├── email/                  # SES configuration (optional)
     ├── load_balancer/          # ALB + WAF
     ├── meilisearch/            # Meilisearch (optional)

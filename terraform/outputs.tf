@@ -188,6 +188,11 @@ output "rds_read_replica_endpoint" {
   sensitive   = true
 }
 
+output "rds_port" {
+  description = "Database port"
+  value       = module.database.rds_port
+}
+
 output "redis_endpoint" {
   description = "Redis cluster endpoint"
   value       = module.cache.redis_endpoint

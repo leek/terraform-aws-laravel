@@ -17,23 +17,37 @@ yarn.lock
 # Development files
 .env*
 !.env.example
+*.csv
 *.log
 npm-debug.log
 yarn-error.log
 .phpunit.result.cache
 Homestead.json
 Homestead.yaml
+.agents/
+.ai/
+.amp/
 .claude
+.codex/
+.cursor/
+.gemini/
+.serena/
+.worktrees/
+.phpstorm.meta.php
 .husky
+.playwright-mcp/
 
 # Storage and cache (we generate these during build)
+bootstrap/cache/*
+!bootstrap/cache/.gitignore
+storage/debugbar/
 storage/logs/*
 storage/framework/cache/*
 storage/framework/sessions/*
 storage/framework/testing/*
 storage/app/*
-# Note: We do NOT ignore storage/framework/views/* or bootstrap/cache/*
-# because we'll generate them during the Docker build and want them in the image
+# Note: We do NOT ignore storage/framework/views/* because views are generated
+# during the Docker build and should stay in the image.
 
 # Documentation
 AGENTS.md

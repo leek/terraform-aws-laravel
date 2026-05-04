@@ -1,11 +1,25 @@
 # syntax=docker/dockerfile:1.4
 
 # ========================================
+# Build Arguments
+# ========================================
+ARG COMPOSER_IMAGE=composer:2
+ARG APP_SERVER_MODE=php-fpm
+ARG INSTALL_PGSQL=true
+ARG INSTALL_CHROMIUM=false
+ARG INSTALL_GNUPG=false
+
+# ========================================
+# Stage: Composer binary
+# ========================================
+FROM ${COMPOSER_IMAGE} AS composer_bin
+
+# ========================================
 # Stage: Download Octane binaries
 # ========================================
 FROM alpine:latest AS binaries
 
-ARG APP_SERVER_MODE=php-fpm
+ARG APP_SERVER_MODE
 ARG RR_VERSION=v2025.1.4
 ARG FP_VERSION=v1.9.1
 
@@ -51,8 +65,10 @@ RUN set -o pipefail && \
 # ========================================
 FROM php:8.4-fpm-alpine AS base
 
-ARG APP_SERVER_MODE=php-fpm
-ARG INSTALL_PGSQL=false
+ARG APP_SERVER_MODE
+ARG INSTALL_PGSQL
+ARG INSTALL_CHROMIUM
+ARG INSTALL_GNUPG
 
 # Install system dependencies (merged apk update + upgrade + add into one layer)
 RUN apk update && apk upgrade --no-cache && \
@@ -84,8 +100,9 @@ RUN apk update && apk upgrade --no-cache && \
     mysql-client \
     openssh-client \
     nano && \
-    # PostgreSQL dev libs - only when INSTALL_PGSQL=true
-    if [ "$INSTALL_PGSQL" = "true" ]; then apk add --no-cache postgresql-dev; fi
+    if [ "$INSTALL_PGSQL" = "true" ]; then apk add --no-cache postgresql-dev postgresql-client; fi && \
+    if [ "$INSTALL_CHROMIUM" = "true" ]; then apk add --no-cache chromium nss harfbuzz ttf-freefont font-noto-emoji; fi && \
+    if [ "$INSTALL_GNUPG" = "true" ]; then apk add --no-cache gnupg; fi
 
 # Install PHP extensions
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
@@ -142,10 +159,14 @@ RUN apk add --no-cache \
     zip \
     python3 \
     nodejs \
-    npm
+    npm \
+    build-base \
+    autoconf \
+    automake \
+    libtool
 
 # Install Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+COPY --from=composer_bin /usr/bin/composer /usr/bin/composer
 
 # Copy dependency files
 COPY composer.json composer.lock auth.json* package.json package-lock.json .npmrc* ./
