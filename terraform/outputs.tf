@@ -5,7 +5,7 @@
 # Application
 output "application_url" {
   description = "URL of the application"
-  value       = module.dns.application_url
+  value       = "https://${var.domain_name}"
 }
 
 output "domain_name" {
@@ -76,16 +76,46 @@ output "waf_web_acl_arn" {
   value       = module.load_balancer.waf_web_acl_arn
 }
 
+output "app_cloudfront_distribution_domain" {
+  description = "Domain name of the app CloudFront distribution, if enabled"
+  value       = module.load_balancer.app_cloudfront_distribution_domain
+}
+
+output "app_cloudfront_distribution_id" {
+  description = "ID of the app CloudFront distribution, if enabled"
+  value       = module.load_balancer.app_cloudfront_distribution_id
+}
+
 # Certificates
 output "certificate_arn" {
   description = "ARN of the ACM certificate"
   value       = module.certificates.certificate_arn
 }
 
+output "certificate_domain_validation_options" {
+  description = "DNS validation records for the primary certificate"
+  value       = module.certificates.certificate_domain_validation_options
+}
+
+output "vpn_certificate_domain_validation_options" {
+  description = "DNS validation records for the VPN certificate"
+  value       = module.certificates.vpn_certificate_domain_validation_options
+}
+
+output "vanity_domain_validation_records" {
+  description = "DNS validation records for vanity domain certificates"
+  value       = module.certificates.vanity_domain_validation_records
+}
+
 # Container Registry
 output "ecr_repository_url" {
   description = "URL of the ECR repository"
   value       = module.container_registry.repository_url
+}
+
+output "nightwatch_agent_repository_url" {
+  description = "URL of the optional Nightwatch agent mirror ECR repository"
+  value       = module.container_registry.nightwatch_agent_repository_url
 }
 
 # Compute
@@ -221,6 +251,16 @@ output "app_filesystem_bucket_name" {
   value       = module.storage.app_filesystem_bucket_name
 }
 
+output "cloudfront_distribution_domain" {
+  description = "Domain name of the S3 asset CloudFront distribution, if enabled"
+  value       = module.storage.cloudfront_distribution_domain
+}
+
+output "cloudfront_distribution_id" {
+  description = "ID of the S3 asset CloudFront distribution, if enabled"
+  value       = module.storage.cloudfront_distribution_id
+}
+
 # Security
 output "ecs_execution_role_arn" {
   description = "ARN of the ECS execution role"
@@ -261,6 +301,47 @@ output "sns_topic_arn" {
 output "cloudtrail_arn" {
   description = "ARN of the CloudTrail"
   value       = module.monitoring.cloudtrail_arn
+}
+
+# Email
+output "ses_configuration_set_name" {
+  description = "Name of the SES configuration set, if SES is enabled"
+  value       = var.enable_ses ? module.email[0].ses_configuration_set_name : ""
+}
+
+output "ses_dns_records" {
+  description = "SES DNS records to create when DNS is managed externally"
+  value = var.enable_ses ? {
+    verification = {
+      name  = "_amazonses.${var.domain_name}"
+      type  = "TXT"
+      value = module.email[0].ses_verification_token
+    }
+    dkim = [
+      for token in module.email[0].ses_dkim_tokens : {
+        name  = "${token}._domainkey.${var.domain_name}"
+        type  = "CNAME"
+        value = "${token}.dkim.amazonses.com"
+      }
+    ]
+    mail_from = module.email[0].ses_mail_from_domain != "" ? {
+      mx = {
+        name  = module.email[0].ses_mail_from_domain
+        type  = "MX"
+        value = "10 ${module.email[0].ses_mail_from_mx_value}"
+      }
+      spf = {
+        name  = module.email[0].ses_mail_from_domain
+        type  = "TXT"
+        value = module.email[0].ses_mail_from_spf_value
+      }
+    } : null
+    root_spf = {
+      name  = var.domain_name
+      type  = "TXT"
+      value = module.email[0].ses_root_spf_value
+    }
+  } : null
 }
 
 # Configuration

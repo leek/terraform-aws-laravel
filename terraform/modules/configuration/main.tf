@@ -22,6 +22,26 @@ resource "aws_ssm_parameter" "db_host" {
   tags = var.common_tags
 }
 
+resource "aws_ssm_parameter" "db_connection" {
+  name      = "/${var.app_name}/${var.environment}/DB_CONNECTION"
+  type      = "SecureString"
+  value     = var.db_connection
+  key_id    = var.parameter_store_kms_key_id
+  overwrite = true
+
+  tags = var.common_tags
+}
+
+resource "aws_ssm_parameter" "db_port" {
+  name      = "/${var.app_name}/${var.environment}/DB_PORT"
+  type      = "SecureString"
+  value     = tostring(var.db_port)
+  key_id    = var.parameter_store_kms_key_id
+  overwrite = true
+
+  tags = var.common_tags
+}
+
 resource "aws_ssm_parameter" "db_database" {
   name      = "/${var.app_name}/${var.environment}/DB_DATABASE"
   type      = "SecureString"
@@ -73,12 +93,34 @@ resource "aws_ssm_parameter" "aws_secret_access_key" {
   tags = var.common_tags
 }
 
+resource "aws_ssm_parameter" "redis_password" {
+  name      = "/${var.app_name}/${var.environment}/REDIS_PASSWORD"
+  type      = "SecureString"
+  value     = var.redis_auth_token
+  key_id    = var.parameter_store_kms_key_id
+  overwrite = true
+
+  tags = var.common_tags
+}
+
 # Read Replica Configuration (for Laravel database reads)
 # Falls back to primary host if no replica exists
 resource "aws_ssm_parameter" "db_read_host" {
   name      = "/${var.app_name}/${var.environment}/DB_READ_HOST"
   type      = "SecureString"
   value     = var.rds_read_replica_endpoint != "" ? var.rds_read_replica_endpoint : var.rds_endpoint
+  key_id    = var.parameter_store_kms_key_id
+  overwrite = true
+
+  tags = var.common_tags
+}
+
+resource "aws_ssm_parameter" "additional_secrets" {
+  for_each = toset(nonsensitive([for secret in var.additional_secret_environment_variables : secret.name]))
+
+  name      = "/${var.app_name}/${var.environment}/${each.key}"
+  type      = "SecureString"
+  value     = [for secret in var.additional_secret_environment_variables : secret.value if secret.name == each.key][0]
   key_id    = var.parameter_store_kms_key_id
   overwrite = true
 

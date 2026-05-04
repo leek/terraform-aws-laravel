@@ -154,3 +154,33 @@ variable "db_port" {
   type        = number
   default     = 3306
 }
+
+variable "enable_database_bootstrap" {
+  description = "Run bastion user data that creates/updates application and read-only database users"
+  type        = bool
+  default     = false
+}
+
+variable "enable_scheduled_stop" {
+  description = "Enable EventBridge schedules to stop the bastion off-hours and start it for business hours"
+  type        = bool
+  default     = false
+}
+
+variable "stop_schedule" {
+  description = "Cron expression for stopping the bastion"
+  type        = string
+  default     = "cron(0 23 ? * MON-FRI *)"
+}
+
+variable "start_schedule" {
+  description = "Cron expression for starting the bastion"
+  type        = string
+  default     = "cron(0 12 ? * MON-FRI *)"
+}
+
+variable "schedule_timezone" {
+  description = "IANA timezone name for stop/start schedules"
+  type        = string
+  default     = "UTC"
+}

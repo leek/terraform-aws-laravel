@@ -295,7 +295,7 @@ resource "aws_s3_bucket_policy" "app_filesystem" {
         Resource = "${aws_s3_bucket.app_filesystem.arn}/public/*"
         Condition = {
           StringEquals = {
-            "AWS:SourceArn" = aws_cloudfront_distribution.cdn[0].arn
+            "AWS:SourceArn" = aws_cloudfront_distribution.app_filesystem[0].arn
           }
         }
       }
@@ -316,7 +316,7 @@ resource "aws_cloudfront_origin_access_control" "s3" {
   signing_protocol                  = "sigv4"
 }
 
-resource "aws_cloudfront_distribution" "cdn" {
+resource "aws_cloudfront_distribution" "app_filesystem" {
   count = var.enable_cloudfront ? 1 : 0
 
   enabled             = true
@@ -365,6 +365,11 @@ resource "aws_cloudfront_distribution" "cdn" {
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-${var.environment}-cdn"
   })
+}
+
+moved {
+  from = aws_cloudfront_distribution.cdn[0]
+  to   = aws_cloudfront_distribution.app_filesystem[0]
 }
 
 # AWS Config Bucket
@@ -712,4 +717,3 @@ resource "aws_s3_bucket_public_access_block" "macie_findings" {
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
-

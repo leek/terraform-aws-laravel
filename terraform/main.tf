@@ -18,6 +18,9 @@ locals {
   # Extract the root domain from the full domain name
   domain_parts = split(".", var.domain_name)
   root_domain  = length(local.domain_parts) > 2 ? join(".", slice(local.domain_parts, length(local.domain_parts) - 2, length(local.domain_parts))) : var.domain_name
+  route53_zone_id = var.route53_zone_id != "" ? var.route53_zone_id : (
+    var.manage_route53_dns ? data.aws_route53_zone.main[0].zone_id : ""
+  )
 
   # Workspace validation mapping
   workspace_environment_map = {
@@ -35,6 +38,15 @@ locals {
     aurora-postgresql = 5432
   }
   db_port = local.db_port_map[var.db_engine]
+
+  db_connection_map = {
+    mysql             = "mysql"
+    mariadb           = "mysql"
+    postgres          = "pgsql"
+    aurora-mysql      = "mysql"
+    aurora-postgresql = "pgsql"
+  }
+  db_connection = local.db_connection_map[var.db_engine]
 }
 
 # ========================================
@@ -55,13 +67,14 @@ data "aws_availability_zones" "available" {
 }
 
 data "aws_route53_zone" "main" {
+  count        = var.manage_route53_dns && var.route53_zone_id == "" ? 1 : 0
   name         = local.root_domain
   private_zone = false
 }
 
 # Data source for test email domains (only needed for non-production environments)
 data "aws_route53_zone" "test_email_domain" {
-  count        = length(var.ses_test_email_domains) > 0 ? 1 : 0
+  count        = var.manage_route53_dns && length(var.ses_test_email_domains) > 0 ? 1 : 0
   name         = var.ses_test_email_domains[0]
   private_zone = false
 }
@@ -82,33 +95,41 @@ resource "random_password" "db_password" {
 module "networking" {
   source = "./modules/networking"
 
-  app_name           = var.app_name
-  environment        = var.environment
-  aws_region         = var.aws_region
-  vpc_cidr           = var.vpc_cidr
-  availability_zones = data.aws_availability_zones.available.names
-  db_port            = local.db_port
-  common_tags        = local.common_tags
+  app_name                                  = var.app_name
+  environment                               = var.environment
+  aws_region                                = var.aws_region
+  vpc_cidr                                  = var.vpc_cidr
+  availability_zones                        = data.aws_availability_zones.available.names
+  db_port                                   = local.db_port
+  single_nat_gateway                        = var.single_nat_gateway
+  enable_vpc_interface_endpoints            = var.enable_vpc_interface_endpoints
+  enabled_vpc_interface_endpoints           = var.enabled_vpc_interface_endpoints
+  rds_additional_ingress_cidrs              = var.rds_additional_ingress_cidrs
+  rds_additional_ingress_security_group_ids = var.rds_additional_ingress_security_group_ids
+  common_tags                               = local.common_tags
 }
 
 # SSL Certificates
 module "certificates" {
   source = "./modules/certificates"
 
-  app_name        = var.app_name
-  environment     = var.environment
-  domain_name     = var.domain_name
-  route53_zone_id = data.aws_route53_zone.main.zone_id
-  common_tags     = local.common_tags
+  app_name               = var.app_name
+  environment            = var.environment
+  domain_name            = var.domain_name
+  route53_zone_id        = local.route53_zone_id
+  manage_route53_records = var.manage_route53_dns
+  vanity_domains         = [for vanity_domain in var.vanity_domains : { domain = vanity_domain.domain }]
+  common_tags            = local.common_tags
 }
 
 # Container Registry
 module "container_registry" {
   source = "./modules/container_registry"
 
-  app_name    = var.app_name
-  environment = var.environment
-  common_tags = local.common_tags
+  app_name                       = var.app_name
+  environment                    = var.environment
+  enable_nightwatch_agent_mirror = var.enable_nightwatch_agent_mirror
+  common_tags                    = local.common_tags
 }
 
 # SQS Message Queues
@@ -135,46 +156,56 @@ module "security" {
   create_github_oidc_provider = var.environment == "staging" ? true : false
   common_tags                 = local.common_tags
   caller_identity_account_id  = data.aws_caller_identity.current.account_id
+  enable_bedrock              = var.enable_bedrock
+  bedrock_region              = var.bedrock_region
+  dockerhub_username          = var.dockerhub_username
+  dockerhub_access_token      = var.dockerhub_access_token
 }
 
 # Database (RDS / Aurora)
 module "database" {
   source = "./modules/database"
 
-  app_name                    = var.app_name
-  environment                 = var.environment
-  aws_region                  = var.aws_region
-  vpc_id                      = module.networking.vpc_id
-  private_subnets             = module.networking.private_subnets
-  rds_security_group_id       = module.networking.rds_security_group_id
-  db_engine                   = var.db_engine
-  db_engine_version           = var.db_engine_version
-  db_instance_class           = var.db_instance_class
-  db_allocated_storage        = var.db_allocated_storage
-  db_max_allocated_storage    = var.db_max_allocated_storage
-  rds_kms_key_arn             = module.security.rds_kms_key_arn
-  multi_az                    = var.db_multi_az
-  enable_performance_insights = var.enable_performance_insights
-  enable_deletion_protection  = var.enable_deletion_protection
-  create_read_replica         = var.db_create_read_replica
-  read_replica_instance_class = var.db_read_replica_instance_class
-  aurora_enable_serverlessv2  = var.aurora_enable_serverlessv2
-  aurora_min_capacity         = var.aurora_min_capacity
-  aurora_max_capacity         = var.aurora_max_capacity
-  aurora_instance_count       = var.aurora_instance_count
-  common_tags                 = local.common_tags
+  app_name                      = var.app_name
+  environment                   = var.environment
+  aws_region                    = var.aws_region
+  vpc_id                        = module.networking.vpc_id
+  private_subnets               = module.networking.private_subnets
+  rds_security_group_id         = module.networking.rds_security_group_id
+  db_engine                     = var.db_engine
+  db_engine_version             = var.db_engine_version
+  db_master_username            = var.db_master_username
+  enable_postgres_audit         = var.enable_postgres_audit
+  cloudwatch_log_retention_days = var.db_cloudwatch_log_retention_days
+  db_instance_class             = var.db_instance_class
+  db_allocated_storage          = var.db_allocated_storage
+  db_max_allocated_storage      = var.db_max_allocated_storage
+  rds_kms_key_arn               = module.security.rds_kms_key_arn
+  multi_az                      = var.db_multi_az
+  enable_performance_insights   = var.enable_performance_insights
+  enable_deletion_protection    = var.enable_deletion_protection
+  create_read_replica           = var.db_create_read_replica
+  read_replica_instance_class   = var.db_read_replica_instance_class
+  aurora_enable_serverlessv2    = var.aurora_enable_serverlessv2
+  aurora_min_capacity           = var.aurora_min_capacity
+  aurora_max_capacity           = var.aurora_max_capacity
+  aurora_instance_count         = var.aurora_instance_count
+  common_tags                   = local.common_tags
 }
 
 # Cache (Redis)
 module "cache" {
   source = "./modules/cache"
 
-  app_name                = var.app_name
-  environment             = var.environment
-  private_subnets         = module.networking.private_subnets
-  redis_security_group_id = module.networking.redis_security_group_id
-  redis_node_type         = var.redis_node_type
-  common_tags             = local.common_tags
+  app_name                 = var.app_name
+  environment              = var.environment
+  private_subnets          = module.networking.private_subnets
+  redis_security_group_id  = module.networking.redis_security_group_id
+  redis_node_type          = var.redis_node_type
+  redis_num_cache_clusters = var.redis_num_cache_nodes
+  redis_engine_version     = var.redis_engine_version
+  apply_immediately        = var.redis_apply_immediately
+  common_tags              = local.common_tags
 }
 
 # Storage (S3 buckets)
@@ -205,6 +236,7 @@ module "monitoring" {
   healthcheck_alarm_emails   = var.healthcheck_alarm_emails
   enable_cloudtrail          = var.enable_cloudtrail
   cloudwatch_logs_kms_key_id = module.security.cloudwatch_logs_kms_key_arn
+  log_retention_days         = var.log_retention_days
   common_tags                = local.common_tags
 }
 
@@ -213,52 +245,86 @@ module "email" {
   count  = var.enable_ses ? 1 : 0
   source = "./modules/email"
 
-  app_name                    = var.app_name
-  environment                 = var.environment
-  domain_name                 = var.domain_name
-  route53_zone_id             = data.aws_route53_zone.main.zone_id
-  test_email_addresses        = var.ses_test_emails
-  test_email_domains          = var.ses_test_email_domains
-  test_domain_route53_zone_id = length(var.ses_test_email_domains) > 0 ? data.aws_route53_zone.test_email_domain[0].zone_id : ""
-  common_tags                 = local.common_tags
+  app_name                         = var.app_name
+  environment                      = var.environment
+  aws_region                       = var.aws_region
+  caller_identity_account_id       = data.aws_caller_identity.current.account_id
+  domain_name                      = var.domain_name
+  route53_zone_id                  = local.route53_zone_id
+  manage_route53_records           = var.manage_route53_dns
+  test_email_addresses             = var.ses_test_emails
+  test_email_domains               = var.ses_test_email_domains
+  test_domain_route53_zone_id      = var.manage_route53_dns && length(var.ses_test_email_domains) > 0 ? data.aws_route53_zone.test_email_domain[0].zone_id : ""
+  mail_from_subdomain              = var.ses_mail_from_subdomain
+  mail_from_behavior_on_mx_failure = var.ses_mail_from_behavior_on_mx_failure
+  enable_event_destination         = var.ses_enable_event_destination
+  event_matching_types             = var.ses_event_matching_types
+  event_notification_emails        = var.ses_event_notification_emails
+  enable_account_suppression       = var.ses_enable_account_suppression
+  suppressed_reasons               = var.ses_suppressed_reasons
+  common_tags                      = local.common_tags
 }
 
 # Load Balancer (ALB, WAF)
 module "load_balancer" {
   source = "./modules/load_balancer"
 
-  app_name              = var.app_name
-  environment           = var.environment
-  aws_region            = var.aws_region
-  domain_name           = var.domain_name
-  vpc_id                = module.networking.vpc_id
-  public_subnets        = module.networking.public_subnets
-  alb_security_group_id = module.networking.alb_security_group_id
-  certificate_arn       = module.certificates.certificate_arn
-  alb_logs_bucket_name  = module.storage.alb_logs_bucket_name
-  enable_access_logs    = var.enable_alb_access_logs
-  blocked_uri_patterns  = var.blocked_uri_patterns
-  common_tags           = local.common_tags
+  app_name                          = var.app_name
+  environment                       = var.environment
+  aws_region                        = var.aws_region
+  domain_name                       = var.domain_name
+  vpc_id                            = module.networking.vpc_id
+  public_subnets                    = module.networking.public_subnets
+  alb_security_group_id             = module.networking.alb_security_group_id
+  certificate_arn                   = module.certificates.certificate_arn
+  alb_logs_bucket_name              = module.storage.alb_logs_bucket_name
+  enable_access_logs                = var.enable_alb_access_logs
+  blocked_uri_patterns              = var.blocked_uri_patterns
+  enable_bot_control                = var.enable_bot_control
+  rate_limit_general                = var.rate_limit_general
+  rate_limit_livewire               = var.rate_limit_livewire
+  rate_limit_excluded_path_prefixes = var.rate_limit_excluded_path_prefixes
+  rate_limit_excluded_exact_paths   = var.rate_limit_excluded_exact_paths
+  health_check_path                 = var.alb_health_check_path
+  enable_stickiness                 = var.enable_alb_stickiness
+  ssl_policy                        = var.alb_ssl_policy
+  enable_cloudfront_app             = var.enable_cloudfront_app
+  cloudfront_app_aliases            = var.cloudfront_app_aliases
+  cloudfront_app_certificate_arn    = var.cloudfront_app_certificate_arn
+  cloudfront_app_price_class        = var.cloudfront_app_price_class
+  vanity_domains = [
+    for vanity_domain in var.vanity_domains : {
+      domain          = vanity_domain.domain
+      redirect_host   = vanity_domain.redirect_host
+      redirect_path   = vanity_domain.redirect_path
+      certificate_arn = module.certificates.vanity_domain_certificate_arns[vanity_domain.domain]
+    }
+  ]
+  common_tags = local.common_tags
 }
 
 # Configuration (SSM parameters)
 module "configuration" {
   source = "./modules/configuration"
 
-  app_name                   = var.app_name
-  app_key                    = var.app_key
-  environment                = var.environment
-  parameter_store_kms_key_id = module.security.parameter_store_kms_key_id
-  rds_endpoint               = module.database.rds_endpoint
-  rds_database_name          = module.database.rds_database_name
-  rds_username               = module.database.rds_username
-  app_db_username            = var.app_db_username
-  app_db_password            = var.app_db_password
-  rds_read_replica_endpoint  = module.database.rds_read_replica_endpoint != null ? module.database.rds_read_replica_endpoint : ""
-  aws_region                 = var.aws_region
-  aws_access_key_id          = module.security.laravel_user_access_key_id
-  aws_secret_access_key      = module.security.laravel_user_secret_access_key
-  common_tags                = local.common_tags
+  app_name                                = var.app_name
+  app_key                                 = var.app_key
+  environment                             = var.environment
+  parameter_store_kms_key_id              = module.security.parameter_store_kms_key_id
+  rds_endpoint                            = module.database.rds_endpoint
+  rds_database_name                       = module.database.rds_database_name
+  db_connection                           = local.db_connection
+  db_port                                 = module.database.rds_port
+  rds_username                            = module.database.rds_username
+  app_db_username                         = var.app_db_username
+  app_db_password                         = var.app_db_password
+  rds_read_replica_endpoint               = module.database.rds_read_replica_endpoint != null ? module.database.rds_read_replica_endpoint : ""
+  redis_auth_token                        = module.cache.redis_auth_token
+  aws_region                              = var.aws_region
+  aws_access_key_id                       = module.security.laravel_user_access_key_id
+  aws_secret_access_key                   = module.security.laravel_user_secret_access_key
+  additional_secret_environment_variables = var.additional_secret_environment_variables
+  common_tags                             = local.common_tags
 }
 
 # Compute (ECS cluster, services)
@@ -270,6 +336,8 @@ module "compute" {
   environment                = var.environment
   aws_region                 = var.aws_region
   domain_name                = var.domain_name
+  db_connection              = local.db_connection
+  db_port                    = module.database.rds_port
   vpc_id                     = module.networking.vpc_id
   private_subnets            = module.networking.private_subnets
   ecs_security_group_id      = module.networking.ecs_security_group_id
@@ -306,12 +374,14 @@ module "compute" {
   scheduler_memory        = var.scheduler_memory
   scheduler_desired_count = var.scheduler_desired_count
 
-  meilisearch_host                 = var.enable_meilisearch ? module.meilisearch[0].meilisearch_host : ""
-  meilisearch_master_key           = var.enable_meilisearch ? var.meilisearch_master_key : ""
-  redis_endpoint                   = module.cache.redis_endpoint
-  redis_port                       = module.cache.redis_port
-  app_server_mode                  = var.app_server_mode
-  additional_environment_variables = var.additional_environment_variables
+  meilisearch_host                             = var.enable_meilisearch ? module.meilisearch[0].meilisearch_host : ""
+  meilisearch_master_key                       = var.enable_meilisearch ? var.meilisearch_master_key : ""
+  redis_endpoint                               = module.cache.redis_endpoint
+  redis_port                                   = module.cache.redis_port
+  ses_configuration_set_name                   = var.enable_ses ? module.email[0].ses_configuration_set_name : ""
+  app_server_mode                              = var.app_server_mode
+  additional_environment_variables             = var.additional_environment_variables
+  additional_secret_environment_variable_names = nonsensitive([for secret in var.additional_secret_environment_variables : secret.name])
 
   # Nightwatch configuration
   enable_nightwatch                = var.enable_nightwatch
@@ -322,6 +392,7 @@ module "compute" {
   nightwatch_agent_image           = var.nightwatch_agent_image
   nightwatch_agent_cpu             = var.nightwatch_agent_cpu
   nightwatch_agent_memory          = var.nightwatch_agent_memory
+  dockerhub_credentials_secret_arn = module.security.dockerhub_credentials_secret_arn
 
   # Scheduled scaling configuration
   enable_scheduled_scaling    = var.enable_scheduled_scaling
@@ -334,12 +405,13 @@ module "compute" {
 
 # DNS (Route53 records)
 module "dns" {
+  count  = var.manage_route53_dns ? 1 : 0
   source = "./modules/dns"
 
   app_name        = var.app_name
   environment     = var.environment
   domain_name     = var.domain_name
-  route53_zone_id = data.aws_route53_zone.main.zone_id
+  route53_zone_id = local.route53_zone_id
   alb_dns_name    = module.load_balancer.alb_dns_name
   alb_zone_id     = module.load_balancer.alb_zone_id
   dmarc_record    = var.dmarc_record
@@ -390,6 +462,11 @@ module "bastion" {
   aws_region                     = var.aws_region
   db_engine                      = var.db_engine
   db_port                        = local.db_port
+  enable_database_bootstrap      = var.enable_bastion_database_bootstrap
+  enable_scheduled_stop          = var.enable_bastion_scheduled_stop
+  stop_schedule                  = var.bastion_stop_schedule
+  start_schedule                 = var.bastion_start_schedule
+  schedule_timezone              = var.bastion_schedule_timezone
 
   tags = local.common_tags
 }

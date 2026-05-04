@@ -25,9 +25,9 @@ locals {
     }
     postgres = {
       engine               = "postgres"
-      engine_version       = var.db_engine_version != "" ? var.db_engine_version : "16.4"
-      major_engine_version = "16"
-      family               = "postgres16"
+      engine_version       = var.db_engine_version != "" ? var.db_engine_version : "18.3"
+      major_engine_version = "18"
+      family               = "postgres18"
       port                 = 5432
     }
     aurora-mysql = {
@@ -39,15 +39,42 @@ locals {
     }
     aurora-postgresql = {
       engine               = "aurora-postgresql"
-      engine_version       = var.db_engine_version != "" ? var.db_engine_version : "16.4"
-      major_engine_version = "16"
-      family               = "aurora-postgresql16"
+      engine_version       = var.db_engine_version != "" ? var.db_engine_version : "18.3"
+      major_engine_version = "18"
+      family               = "aurora-postgresql18"
       port                 = 5432
     }
   }
 
   # Get current engine config
   current_engine = local.engine_config[var.db_engine]
+  is_postgres    = contains(["postgres", "aurora-postgresql"], var.db_engine)
+  is_mysql       = contains(["mysql", "mariadb", "aurora-mysql"], var.db_engine)
+
+  mysql_parameters = [
+    {
+      name         = "skip_name_resolve"
+      value        = "1"
+      apply_method = "pending-reboot"
+    }
+  ]
+
+  postgres_parameters = var.enable_postgres_audit ? [
+    { name = "shared_preload_libraries", value = "pg_stat_statements,pgaudit", apply_method = "pending-reboot" },
+    { name = "pgaudit.log", value = "ddl,role,write", apply_method = "pending-reboot" },
+    { name = "pgaudit.log_catalog", value = "0", apply_method = "pending-reboot" },
+    { name = "log_statement", value = "ddl", apply_method = "immediate" },
+    { name = "log_min_duration_statement", value = "1000", apply_method = "immediate" },
+    { name = "log_connections", value = "1", apply_method = "immediate" },
+    { name = "log_disconnections", value = "1", apply_method = "immediate" },
+    { name = "log_lock_waits", value = "1", apply_method = "immediate" }
+  ] : []
+
+  database_parameters           = local.is_postgres ? local.postgres_parameters : (local.is_mysql ? local.mysql_parameters : [])
+  rds_cloudwatch_log_exports    = local.is_postgres ? ["postgresql", "upgrade"] : ["audit", "error", "general", "slowquery"]
+  cloudwatch_log_retention_days = var.cloudwatch_log_retention_days != null ? var.cloudwatch_log_retention_days : (var.environment == "production" ? 30 : 7)
+  default_master_username       = local.is_postgres ? "postgres_admin" : "admin"
+  effective_db_master_username  = var.db_master_username != "" ? var.db_master_username : local.default_master_username
 
   # Determine instance class for Aurora vs RDS
   # Aurora Serverless v2 uses db.serverless, otherwise use provided instance class
@@ -68,7 +95,7 @@ resource "random_password" "rds_master" {
 # Store master password in Secrets Manager
 resource "aws_secretsmanager_secret" "rds_master_password" {
   name        = "${var.app_name}-${var.environment}-rds-master-password"
-  description = "Master password for RDS MySQL database"
+  description = "Master password for RDS ${local.current_engine.engine} database"
   kms_key_id  = var.rds_kms_key_arn
 
   tags = var.common_tags
@@ -77,7 +104,7 @@ resource "aws_secretsmanager_secret" "rds_master_password" {
 resource "aws_secretsmanager_secret_version" "rds_master_password" {
   secret_id = aws_secretsmanager_secret.rds_master_password.id
   secret_string = jsonencode({
-    username = "admin"
+    username = local.effective_db_master_username
     password = random_password.rds_master.result
   })
 }
@@ -96,9 +123,10 @@ module "rds" {
   instance_class              = var.db_instance_class
   allocated_storage           = var.db_allocated_storage
   max_allocated_storage       = var.db_max_allocated_storage
+  storage_type                = "gp3"
 
   db_name  = "${var.app_name}_${var.environment}"
-  username = "admin"
+  username = local.effective_db_master_username
   password = random_password.rds_master.result
 
   # Explicitly disable managed master password to support read replicas
@@ -118,7 +146,13 @@ module "rds" {
   # Parameter and option groups
   family                    = local.current_engine.family
   create_db_parameter_group = true
-  create_db_option_group    = var.db_engine != "postgres" # PostgreSQL doesn't support option groups
+  create_db_option_group    = false
+
+  parameters = local.database_parameters
+
+  enabled_cloudwatch_logs_exports        = local.rds_cloudwatch_log_exports
+  create_cloudwatch_log_group            = true
+  cloudwatch_log_group_retention_in_days = local.cloudwatch_log_retention_days
 
   # Backup
   backup_retention_period = var.environment == "production" ? 30 : 7
@@ -137,6 +171,7 @@ module "rds" {
   # Performance Insights
   performance_insights_enabled          = var.enable_performance_insights
   performance_insights_retention_period = var.enable_performance_insights ? 7 : null
+  performance_insights_kms_key_id       = var.enable_performance_insights ? var.rds_kms_key_arn : null
 
   # Other settings
   deletion_protection = var.enable_deletion_protection
@@ -172,6 +207,7 @@ module "rds_read_replica" {
 
   # Storage - inherit autoscaling settings from primary
   max_allocated_storage = var.db_max_allocated_storage
+  storage_type          = "gp3"
 
   # High Availability - match primary setting
   multi_az = var.multi_az
@@ -179,7 +215,13 @@ module "rds_read_replica" {
   # Parameter and option groups
   family                    = local.current_engine.family
   create_db_parameter_group = true
-  create_db_option_group    = var.db_engine != "postgres" # PostgreSQL doesn't support option groups
+  create_db_option_group    = false
+
+  parameters = local.database_parameters
+
+  enabled_cloudwatch_logs_exports        = local.rds_cloudwatch_log_exports
+  create_cloudwatch_log_group            = true
+  cloudwatch_log_group_retention_in_days = local.cloudwatch_log_retention_days
 
   # Disable managed master password (not supported for replicas)
   manage_master_user_password = false
@@ -198,6 +240,7 @@ module "rds_read_replica" {
   # Performance Insights - match primary setting
   performance_insights_enabled          = var.enable_performance_insights
   performance_insights_retention_period = var.enable_performance_insights ? 7 : null
+  performance_insights_kms_key_id       = var.enable_performance_insights ? var.rds_kms_key_arn : null
 
   # Other settings - match primary deletion protection
   deletion_protection = var.enable_deletion_protection
@@ -263,7 +306,7 @@ module "aurora" {
 
   # Database configuration
   database_name   = "${var.app_name}_${var.environment}"
-  master_username = "admin"
+  master_username = local.effective_db_master_username
   master_password = random_password.rds_master.result
 
   # Don't use managed password for consistency with RDS
@@ -275,13 +318,14 @@ module "aurora" {
   preferred_maintenance_window = "sun:04:00-sun:05:00"
 
   # Monitoring
-  enabled_cloudwatch_logs_exports = var.db_engine == "aurora-mysql" ? ["audit", "error", "general", "slowquery"] : ["postgresql"]
+  enabled_cloudwatch_logs_exports = local.rds_cloudwatch_log_exports
   monitoring_interval             = 60
   create_monitoring_role          = true
 
   # Performance Insights
   performance_insights_enabled          = var.enable_performance_insights
   performance_insights_retention_period = var.enable_performance_insights ? 7 : null
+  performance_insights_kms_key_id       = var.enable_performance_insights ? var.rds_kms_key_arn : null
 
   # Deletion protection
   deletion_protection = var.enable_deletion_protection

@@ -29,6 +29,16 @@ variable "rds_database_name" {
   type        = string
 }
 
+variable "db_connection" {
+  description = "Laravel database connection driver (mysql or pgsql)"
+  type        = string
+}
+
+variable "db_port" {
+  description = "Database port"
+  type        = number
+}
+
 variable "rds_username" {
   description = "RDS master username (admin)"
   type        = string
@@ -71,4 +81,25 @@ variable "rds_read_replica_endpoint" {
   description = "RDS read replica endpoint (optional)"
   type        = string
   default     = ""
+}
+
+variable "redis_auth_token" {
+  description = "Redis AUTH token to store as REDIS_PASSWORD"
+  type        = string
+  sensitive   = true
+}
+
+variable "additional_secret_environment_variables" {
+  description = "Additional secret env vars to store as SSM SecureString parameters under /{app_name}/{environment}/{NAME}"
+  type = list(object({
+    name  = string
+    value = string
+  }))
+  default   = []
+  sensitive = true
+
+  validation {
+    condition     = length(var.additional_secret_environment_variables) == length(distinct([for secret in var.additional_secret_environment_variables : secret.name]))
+    error_message = "additional_secret_environment_variables must not contain duplicate names."
+  }
 }

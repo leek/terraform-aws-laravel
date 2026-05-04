@@ -40,3 +40,9 @@ variable "kms_key_arn" {
   type        = string
   default     = ""
 }
+
+variable "enable_nightwatch_agent_mirror" {
+  description = "Create an ECR repository for mirroring the Laravel Nightwatch agent image"
+  type        = bool
+  default     = false
+}

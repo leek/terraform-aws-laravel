@@ -87,3 +87,8 @@ output "laravel_user_secret_access_key" {
   value       = aws_iam_access_key.laravel_app_user.secret
   sensitive   = true
 }
+
+output "dockerhub_credentials_secret_arn" {
+  description = "ARN of the Docker Hub credentials secret, or empty string when disabled"
+  value       = length(aws_secretsmanager_secret.dockerhub) > 0 ? aws_secretsmanager_secret.dockerhub[0].arn : ""
+}

@@ -24,6 +24,29 @@ variable "redis_node_type" {
   default     = "cache.t3.small"
 }
 
+variable "redis_num_cache_clusters" {
+  description = "Number of cache clusters in the replication group. 2+ enables automatic failover and Multi-AZ."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.redis_num_cache_clusters >= 1
+    error_message = "redis_num_cache_clusters must be at least 1."
+  }
+}
+
+variable "redis_engine_version" {
+  description = "Redis engine version"
+  type        = string
+  default     = "7.1"
+}
+
+variable "apply_immediately" {
+  description = "Apply ElastiCache changes immediately instead of waiting for the maintenance window"
+  type        = bool
+  default     = false
+}
+
 variable "common_tags" {
   description = "Common tags for all resources"
   type        = map(string)

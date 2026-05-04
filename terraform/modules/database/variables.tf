@@ -102,6 +102,24 @@ variable "db_engine_version" {
   default     = ""
 }
 
+variable "db_master_username" {
+  description = "Database master username. Leave empty for engine-specific default (admin for MySQL/MariaDB, postgres_admin for PostgreSQL)."
+  type        = string
+  default     = ""
+}
+
+variable "enable_postgres_audit" {
+  description = "Enable PostgreSQL audit-oriented parameter group settings when using PostgreSQL engines"
+  type        = bool
+  default     = true
+}
+
+variable "cloudwatch_log_retention_days" {
+  description = "Retention in days for database CloudWatch log groups. Null uses 30 days in production and 7 days elsewhere."
+  type        = number
+  default     = null
+}
+
 variable "aurora_enable_serverlessv2" {
   description = "Enable Aurora Serverless v2 scaling (only for Aurora engines)"
   type        = bool

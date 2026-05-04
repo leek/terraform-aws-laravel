@@ -24,3 +24,13 @@ output "waf_web_acl_arn" {
   description = "ARN of the WAF Web ACL"
   value       = aws_wafv2_web_acl.main.arn
 }
+
+output "app_cloudfront_distribution_domain" {
+  description = "Domain name of the app CloudFront distribution, if enabled"
+  value       = var.enable_cloudfront_app ? aws_cloudfront_distribution.app[0].domain_name : ""
+}
+
+output "app_cloudfront_distribution_id" {
+  description = "ID of the app CloudFront distribution, if enabled"
+  value       = var.enable_cloudfront_app ? aws_cloudfront_distribution.app[0].id : ""
+}

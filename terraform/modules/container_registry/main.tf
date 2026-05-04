@@ -109,3 +109,47 @@ resource "aws_ecr_lifecycle_policy" "base" {
     ]
   })
 }
+
+# Optional mirror for third-party sidecar images such as Laravel Nightwatch.
+resource "aws_ecr_repository" "nightwatch_agent" {
+  count = var.enable_nightwatch_agent_mirror ? 1 : 0
+
+  name                 = "${var.app_name}-${var.environment}-nightwatch-agent"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  encryption_configuration {
+    encryption_type = var.encryption_type
+    kms_key         = var.encryption_type == "KMS" ? var.kms_key_arn : null
+  }
+
+  tags = merge(var.common_tags, {
+    Name = "${var.app_name}-${var.environment}-nightwatch-agent-ecr"
+  })
+}
+
+resource "aws_ecr_lifecycle_policy" "nightwatch_agent" {
+  count = var.enable_nightwatch_agent_mirror ? 1 : 0
+
+  repository = aws_ecr_repository.nightwatch_agent[0].name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep last 5 mirrored Nightwatch agent images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 5
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}

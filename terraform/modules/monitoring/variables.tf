@@ -49,3 +49,9 @@ variable "cloudwatch_logs_kms_key_id" {
   description = "KMS key ID for CloudWatch Logs encryption"
   type        = string
 }
+
+variable "log_retention_days" {
+  description = "Number of days to retain ECS CloudWatch logs"
+  type        = number
+  default     = 7
+}

@@ -20,6 +20,21 @@ variable "app_key" {
   sensitive   = true
 }
 
+variable "additional_secret_environment_variables" {
+  description = "Additional secret env vars to store as SSM SecureString parameters and expose to ECS task definitions"
+  type = list(object({
+    name  = string
+    value = string
+  }))
+  default   = []
+  sensitive = true
+
+  validation {
+    condition     = length(var.additional_secret_environment_variables) == length(distinct([for secret in var.additional_secret_environment_variables : secret.name]))
+    error_message = "additional_secret_environment_variables must not contain duplicate names."
+  }
+}
+
 variable "environment" {
   description = "Environment name. Must match the selected Terraform workspace."
   type        = string
@@ -35,6 +50,28 @@ variable "domain_name" {
   type        = string
 }
 
+variable "manage_route53_dns" {
+  description = "Create Route53 DNS records for certificates, ALB, SES, and DMARC. Set false when DNS is managed externally."
+  type        = bool
+  default     = true
+}
+
+variable "route53_zone_id" {
+  description = "Existing Route53 hosted zone ID. Leave empty to look up by root domain when manage_route53_dns is true."
+  type        = string
+  default     = ""
+}
+
+variable "vanity_domains" {
+  description = "External vanity domains to certificate and redirect through the ALB"
+  type = list(object({
+    domain        = string
+    redirect_host = string
+    redirect_path = optional(string, "/")
+  }))
+  default = []
+}
+
 variable "github_org" {
   description = "GitHub organization/username"
   type        = string
@@ -43,6 +80,32 @@ variable "github_org" {
 variable "github_repo" {
   description = "GitHub repository name"
   type        = string
+}
+
+variable "enable_bedrock" {
+  description = "Enable AWS Bedrock access for ECS tasks and the Laravel IAM user"
+  type        = bool
+  default     = false
+}
+
+variable "bedrock_region" {
+  description = "AWS region for Bedrock. Leave empty to use aws_region."
+  type        = string
+  default     = ""
+}
+
+variable "dockerhub_username" {
+  description = "Docker Hub username for authenticated image pulls. Empty disables secret creation."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "dockerhub_access_token" {
+  description = "Docker Hub personal access token for authenticated image pulls. Empty disables secret creation."
+  type        = string
+  default     = ""
+  sensitive   = true
 }
 
 # ========================================
@@ -202,9 +265,27 @@ variable "db_engine" {
 }
 
 variable "db_engine_version" {
-  description = "Database engine version. Leave empty to use default version for selected engine. Defaults: MySQL 8.4.8, MariaDB 10.11.9, PostgreSQL 16.4, Aurora MySQL 8.0.mysql_aurora.3.07.1, Aurora PostgreSQL 16.4"
+  description = "Database engine version. Leave empty to use default version for selected engine. Defaults: MySQL 8.4.8, MariaDB 10.11.9, PostgreSQL 18.3, Aurora MySQL 8.0.mysql_aurora.3.07.1, Aurora PostgreSQL 18.3"
   type        = string
   default     = ""
+}
+
+variable "db_master_username" {
+  description = "Database master username. Leave empty for engine-specific default (admin for MySQL/MariaDB, postgres_admin for PostgreSQL)."
+  type        = string
+  default     = ""
+}
+
+variable "enable_postgres_audit" {
+  description = "Enable PostgreSQL audit-oriented parameter group settings when using PostgreSQL engines"
+  type        = bool
+  default     = true
+}
+
+variable "db_cloudwatch_log_retention_days" {
+  description = "Retention in days for database CloudWatch log groups. Null uses 30 days in production and 7 days elsewhere."
+  type        = number
+  default     = null
 }
 
 variable "db_instance_class" {
@@ -309,9 +390,21 @@ variable "redis_node_type" {
 }
 
 variable "redis_num_cache_nodes" {
-  description = "Number of cache nodes for Redis"
+  description = "Number of cache clusters for the Redis replication group. 2+ enables automatic failover and Multi-AZ."
   type        = number
   default     = 1
+}
+
+variable "redis_engine_version" {
+  description = "Redis engine version"
+  type        = string
+  default     = "7.1"
+}
+
+variable "redis_apply_immediately" {
+  description = "Apply Redis changes immediately instead of waiting for the maintenance window"
+  type        = bool
+  default     = false
 }
 
 # ========================================
@@ -322,6 +415,36 @@ variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
   default     = "10.0.0.0/16"
+}
+
+variable "single_nat_gateway" {
+  description = "Use a single NAT gateway for all private subnets. Set false for one NAT gateway per AZ."
+  type        = bool
+  default     = true
+}
+
+variable "enable_vpc_interface_endpoints" {
+  description = "Create VPC interface endpoints for private AWS service access"
+  type        = bool
+  default     = true
+}
+
+variable "enabled_vpc_interface_endpoints" {
+  description = "AWS service endpoint short names to create when enable_vpc_interface_endpoints is true"
+  type        = list(string)
+  default     = ["ssm", "ssmmessages", "ec2messages", "ecr.api", "ecr.dkr", "logs", "sqs"]
+}
+
+variable "rds_additional_ingress_cidrs" {
+  description = "Additional CIDR blocks allowed to connect to RDS/Aurora"
+  type        = list(string)
+  default     = []
+}
+
+variable "rds_additional_ingress_security_group_ids" {
+  description = "Additional security group IDs allowed to connect to RDS/Aurora"
+  type        = list(string)
+  default     = []
 }
 
 # ========================================
@@ -350,6 +473,36 @@ variable "bastion_allowed_ips" {
   description = "List of IPs allowed to SSH to bastion (CIDR format)"
   type        = list(string)
   default     = []
+}
+
+variable "enable_bastion_database_bootstrap" {
+  description = "Run bastion user data that creates/updates application and read-only database users"
+  type        = bool
+  default     = false
+}
+
+variable "enable_bastion_scheduled_stop" {
+  description = "Enable EventBridge schedules to stop the bastion off-hours and start it for business hours"
+  type        = bool
+  default     = false
+}
+
+variable "bastion_stop_schedule" {
+  description = "Cron expression for stopping the bastion"
+  type        = string
+  default     = "cron(0 23 ? * MON-FRI *)"
+}
+
+variable "bastion_start_schedule" {
+  description = "Cron expression for starting the bastion"
+  type        = string
+  default     = "cron(0 12 ? * MON-FRI *)"
+}
+
+variable "bastion_schedule_timezone" {
+  description = "IANA timezone name for bastion stop/start schedules"
+  type        = string
+  default     = "UTC"
 }
 
 # ========================================
@@ -438,6 +591,12 @@ variable "enable_meilisearch" {
 
 variable "enable_nightwatch" {
   description = "Enable Laravel Nightwatch monitoring as a sidecar container"
+  type        = bool
+  default     = false
+}
+
+variable "enable_nightwatch_agent_mirror" {
+  description = "Create an ECR repository for mirroring the Laravel Nightwatch agent image"
   type        = bool
   default     = false
 }
@@ -547,6 +706,48 @@ variable "ses_test_email_domains" {
   default     = []
 }
 
+variable "ses_mail_from_subdomain" {
+  description = "Subdomain label used for the SES custom MAIL FROM domain. Empty string disables custom MAIL FROM."
+  type        = string
+  default     = "mail"
+}
+
+variable "ses_mail_from_behavior_on_mx_failure" {
+  description = "SES behavior when the custom MAIL FROM MX record is not resolvable"
+  type        = string
+  default     = "UseDefaultValue"
+}
+
+variable "ses_enable_event_destination" {
+  description = "Provision an SNS topic and SES configuration-set event destination for selected events"
+  type        = bool
+  default     = true
+}
+
+variable "ses_event_matching_types" {
+  description = "SES event types routed to the SNS events topic"
+  type        = list(string)
+  default     = ["bounce", "complaint", "reject"]
+}
+
+variable "ses_event_notification_emails" {
+  description = "Email addresses to subscribe to the SES event SNS topic"
+  type        = list(string)
+  default     = []
+}
+
+variable "ses_enable_account_suppression" {
+  description = "Enable SES account-level suppression for bounced/complained recipients"
+  type        = bool
+  default     = true
+}
+
+variable "ses_suppressed_reasons" {
+  description = "Reasons that trigger account-level suppression"
+  type        = list(string)
+  default     = ["BOUNCE", "COMPLAINT"]
+}
+
 # ========================================
 # OPTIONAL: Monitoring
 # ========================================
@@ -581,6 +782,54 @@ variable "blocked_uri_patterns" {
   default     = []
 }
 
+variable "enable_bot_control" {
+  description = "Enable AWS WAF Bot Control managed rule set"
+  type        = bool
+  default     = false
+}
+
+variable "rate_limit_general" {
+  description = "General WAF request rate limit per IP over a 5-minute window"
+  type        = number
+  default     = 2000
+}
+
+variable "rate_limit_livewire" {
+  description = "WAF request rate limit per IP for Livewire endpoints over a 5-minute window"
+  type        = number
+  default     = 10000
+}
+
+variable "rate_limit_excluded_path_prefixes" {
+  description = "Additional URI path prefixes excluded from the general rate limit"
+  type        = list(string)
+  default     = []
+}
+
+variable "rate_limit_excluded_exact_paths" {
+  description = "Additional exact URI paths excluded from the general rate limit"
+  type        = list(string)
+  default     = []
+}
+
+variable "alb_health_check_path" {
+  description = "ALB target group health check path"
+  type        = string
+  default     = "/up"
+}
+
+variable "enable_alb_stickiness" {
+  description = "Enable ALB target group stickiness"
+  type        = bool
+  default     = false
+}
+
+variable "alb_ssl_policy" {
+  description = "ALB HTTPS listener SSL policy"
+  type        = string
+  default     = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+}
+
 # ========================================
 # OPTIONAL: CloudFront CDN
 # ========================================
@@ -600,6 +849,30 @@ variable "cloudfront_domain" {
     condition     = var.cloudfront_domain == "" || can(regex("^[a-zA-Z0-9][a-zA-Z0-9.-]+[a-zA-Z0-9]$", var.cloudfront_domain))
     error_message = "cloudfront_domain must be a bare domain (no scheme, path, or trailing slash), e.g. cdn.example.com"
   }
+}
+
+variable "enable_cloudfront_app" {
+  description = "Enable a CloudFront distribution in front of the ALB"
+  type        = bool
+  default     = false
+}
+
+variable "cloudfront_app_aliases" {
+  description = "Aliases for the app CloudFront distribution. Requires cloudfront_app_certificate_arn."
+  type        = list(string)
+  default     = []
+}
+
+variable "cloudfront_app_certificate_arn" {
+  description = "ACM certificate ARN in us-east-1 for app CloudFront aliases. Empty uses the default CloudFront certificate."
+  type        = string
+  default     = ""
+}
+
+variable "cloudfront_app_price_class" {
+  description = "CloudFront price class for the app distribution"
+  type        = string
+  default     = "PriceClass_100"
 }
 
 # ========================================

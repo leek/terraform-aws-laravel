@@ -332,17 +332,6 @@ resource "aws_iam_role_policy" "ecs_task_role_policy" {
           "ses:SendRawEmail"
         ]
         Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "bedrock:InvokeModel",
-          "bedrock:InvokeModelWithResponseStream"
-        ]
-        Resource = [
-          "arn:aws:bedrock:${var.aws_region}::foundation-model/anthropic.*",
-          "arn:aws:bedrock:${var.aws_region}::foundation-model/us.anthropic.*"
-        ]
       }
     ]
   })
@@ -593,18 +582,108 @@ resource "aws_iam_user_policy" "laravel_app_user_policy" {
           "ses:SendRawEmail"
         ]
         Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "bedrock:InvokeModel",
-          "bedrock:InvokeModelWithResponseStream"
-        ]
-        Resource = [
-          "arn:aws:bedrock:${var.aws_region}::foundation-model/anthropic.*",
-          "arn:aws:bedrock:${var.aws_region}::foundation-model/us.anthropic.*"
-        ]
       }
     ]
   })
+}
+
+# ========================================
+# AWS Bedrock IAM (Optional)
+# ========================================
+
+locals {
+  effective_bedrock_region = var.bedrock_region != "" ? var.bedrock_region : var.aws_region
+  create_dockerhub_secret  = var.dockerhub_username != "" && var.dockerhub_access_token != ""
+}
+
+data "aws_iam_policy_document" "bedrock_invoke" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "bedrock:ListFoundationModels",
+      "bedrock:ListInferenceProfiles"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "bedrock:Converse",
+      "bedrock:ConverseStream",
+      "bedrock:InvokeModel",
+      "bedrock:InvokeModelWithResponseStream"
+    ]
+    resources = ["arn:aws:bedrock:*::foundation-model/*"]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "bedrock:Converse",
+      "bedrock:ConverseStream",
+      "bedrock:InvokeModel",
+      "bedrock:InvokeModelWithResponseStream"
+    ]
+    resources = ["arn:aws:bedrock:${local.effective_bedrock_region}:${var.caller_identity_account_id}:inference-profile/*"]
+  }
+}
+
+resource "aws_iam_role_policy" "ecs_task_bedrock_policy" {
+  count = var.enable_bedrock ? 1 : 0
+
+  name   = "${var.app_name}-${var.environment}-ecs-task-bedrock-policy"
+  role   = aws_iam_role.ecs_task_role.id
+  policy = data.aws_iam_policy_document.bedrock_invoke.json
+}
+
+resource "aws_iam_user_policy" "laravel_app_user_bedrock_policy" {
+  count = var.enable_bedrock ? 1 : 0
+
+  name   = "${var.app_name}-${var.environment}-laravel-user-bedrock-policy"
+  user   = aws_iam_user.laravel_app_user.name
+  policy = data.aws_iam_policy_document.bedrock_invoke.json
+}
+
+# ========================================
+# Docker Hub Registry Credentials (Optional)
+# ========================================
+
+resource "aws_secretsmanager_secret" "dockerhub" {
+  count = local.create_dockerhub_secret ? 1 : 0
+
+  name        = "${var.app_name}-${var.environment}-dockerhub"
+  description = "Docker Hub credentials for ECS repositoryCredentials"
+
+  tags = merge(var.common_tags, {
+    Name = "${var.app_name}-${var.environment}-dockerhub"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "dockerhub" {
+  count = local.create_dockerhub_secret ? 1 : 0
+
+  secret_id = aws_secretsmanager_secret.dockerhub[0].id
+  secret_string = jsonencode({
+    username = var.dockerhub_username
+    password = var.dockerhub_access_token
+  })
+}
+
+data "aws_iam_policy_document" "ecs_execution_dockerhub" {
+  count = local.create_dockerhub_secret ? 1 : 0
+
+  statement {
+    effect    = "Allow"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [aws_secretsmanager_secret.dockerhub[0].arn]
+  }
+}
+
+resource "aws_iam_role_policy" "ecs_execution_role_dockerhub_policy" {
+  count = local.create_dockerhub_secret ? 1 : 0
+
+  name   = "${var.app_name}-${var.environment}-ecs-execution-dockerhub-policy"
+  role   = aws_iam_role.ecs_execution_role.id
+  policy = data.aws_iam_policy_document.ecs_execution_dockerhub[0].json
 }

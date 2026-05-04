@@ -67,5 +67,10 @@ output "macie_findings_bucket_arn" {
 # CloudFront
 output "cloudfront_distribution_domain" {
   description = "Domain name of the CloudFront distribution (if enabled)"
-  value       = var.enable_cloudfront ? aws_cloudfront_distribution.cdn[0].domain_name : ""
+  value       = var.enable_cloudfront ? aws_cloudfront_distribution.app_filesystem[0].domain_name : ""
+}
+
+output "cloudfront_distribution_id" {
+  description = "ID of the CloudFront distribution (if enabled)"
+  value       = var.enable_cloudfront ? aws_cloudfront_distribution.app_filesystem[0].id : ""
 }

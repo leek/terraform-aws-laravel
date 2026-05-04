@@ -19,13 +19,13 @@ resource "aws_acm_certificate" "main" {
 
 # Create DNS validation records
 resource "aws_route53_record" "certificate_validation" {
-  for_each = {
+  for_each = var.manage_route53_records ? {
     for dvo in aws_acm_certificate.main.domain_validation_options : dvo.domain_name => {
       name   = dvo.resource_record_name
       record = dvo.resource_record_value
       type   = dvo.resource_record_type
     }
-  }
+  } : {}
 
   allow_overwrite = true
   name            = each.value.name
@@ -65,13 +65,13 @@ resource "aws_acm_certificate" "vpn_server" {
 
 # Create DNS validation records for VPN certificate
 resource "aws_route53_record" "vpn_certificate_validation" {
-  for_each = {
+  for_each = var.manage_route53_records ? {
     for dvo in toset(aws_acm_certificate.vpn_server.domain_validation_options) : dvo.domain_name => {
       name   = dvo.resource_record_name
       record = dvo.resource_record_value
       type   = dvo.resource_record_type
     }
-  }
+  } : {}
 
   allow_overwrite = true
   name            = each.value.name
@@ -88,5 +88,33 @@ resource "aws_acm_certificate_validation" "vpn_server" {
 
   timeouts {
     create = "5m"
+  }
+}
+
+# Vanity domain certificates are commonly used for external DNS domains. DNS
+# validation records are exposed as outputs and are not managed by Route53 here.
+resource "aws_acm_certificate" "vanity" {
+  for_each = { for vanity_domain in var.vanity_domains : vanity_domain.domain => vanity_domain }
+
+  domain_name               = each.key
+  subject_alternative_names = ["*.${each.key}"]
+  validation_method         = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = merge(var.common_tags, {
+    Name = "${var.app_name}-${var.environment}-vanity-${replace(each.key, ".", "-")}"
+  })
+}
+
+resource "aws_acm_certificate_validation" "vanity" {
+  for_each = aws_acm_certificate.vanity
+
+  certificate_arn = each.value.arn
+
+  timeouts {
+    create = "45m"
   }
 }

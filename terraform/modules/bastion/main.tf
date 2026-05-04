@@ -132,8 +132,12 @@ resource "aws_instance" "bastion" {
     aws_region                     = var.aws_region
     db_engine                      = var.db_engine
     db_port                        = var.db_port
-    setup_database_user            = var.rds_endpoint != "" && var.app_db_username != ""
+    setup_database_user            = var.enable_database_bootstrap && var.rds_endpoint != "" && var.app_db_username != ""
   }))
+
+  lifecycle {
+    ignore_changes = [ami]
+  }
 
   tags = merge(var.tags, {
     Name = "${var.app_name}-${var.environment}-bastion"

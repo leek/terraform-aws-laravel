@@ -8,6 +8,11 @@ locals {
   # This token is used for both app->agent and agent->cloud authentication
   nightwatch_token = var.enable_nightwatch ? var.nightwatch_token : ""
 
+  nightwatch_agent_is_ecr = can(regex("(\\.dkr\\.ecr\\.|^public\\.ecr\\.aws/)", var.nightwatch_agent_image))
+  nightwatch_repository_credentials = (var.dockerhub_credentials_secret_arn != "" && !local.nightwatch_agent_is_ecr) ? {
+    repositoryCredentials = { credentialsParameter = var.dockerhub_credentials_secret_arn }
+  } : {}
+
   # Common environment variables shared across all containers
   common_environment_variables = concat([
     {
@@ -27,6 +32,14 @@ locals {
       value = var.app_server_mode
     },
     {
+      name  = "DB_CONNECTION"
+      value = var.db_connection
+    },
+    {
+      name  = "DB_PORT"
+      value = tostring(var.db_port)
+    },
+    {
       name  = "SESSION_DOMAIN"
       value = ".${var.domain_name}"
     },
@@ -41,6 +54,10 @@ locals {
     {
       name  = "REDIS_PORT"
       value = tostring(var.redis_port)
+    },
+    {
+      name  = "REDIS_SCHEME"
+      value = "tls"
     },
     {
       name  = "SQS_QUEUE"
@@ -77,6 +94,10 @@ locals {
     {
       name  = "AWS_SES_REGION"
       value = var.aws_region
+    },
+    {
+      name  = "SES_CONFIGURATION_SET"
+      value = var.ses_configuration_set_name
     },
     {
       name  = "SCOUT_DRIVER"
@@ -143,7 +164,7 @@ locals {
   ] : [])
 
   # Common secrets shared across all containers
-  common_secrets = [
+  common_secrets = concat([
     {
       name      = "APP_KEY"
       valueFrom = "arn:aws:ssm:${var.aws_region}:${var.caller_identity_account_id}:parameter/${var.app_name}/${var.environment}/APP_KEY"
@@ -179,8 +200,17 @@ locals {
     {
       name      = "AWS_SECRET_ACCESS_KEY"
       valueFrom = "arn:aws:ssm:${var.aws_region}:${var.caller_identity_account_id}:parameter/${var.app_name}/${var.environment}/AWS_SECRET_ACCESS_KEY"
+    },
+    {
+      name      = "REDIS_PASSWORD"
+      valueFrom = "arn:aws:ssm:${var.aws_region}:${var.caller_identity_account_id}:parameter/${var.app_name}/${var.environment}/REDIS_PASSWORD"
     }
-  ]
+    ], [
+    for name in var.additional_secret_environment_variable_names : {
+      name      = name
+      valueFrom = "arn:aws:ssm:${var.aws_region}:${var.caller_identity_account_id}:parameter/${var.app_name}/${var.environment}/${name}"
+    }
+  ])
 
   # Worker services configuration (queue-worker and scheduler)
   worker_services = {
@@ -221,7 +251,7 @@ locals {
 #checkov:skip=CKV_TF_1:Version constraint provides better balance between reproducibility and maintainability
 module "ecs" {
   source  = "terraform-aws-modules/ecs/aws"
-  version = "~> 5.0"
+  version = "~> 6.0"
 
   cluster_name = "${var.app_name}-${var.environment}"
 
@@ -234,16 +264,12 @@ module "ecs" {
     }
   }
 
-  fargate_capacity_providers = {
+  default_capacity_provider_strategy = {
     FARGATE = {
-      default_capacity_provider_strategy = {
-        weight = 50
-      }
+      weight = 50
     }
     FARGATE_SPOT = {
-      default_capacity_provider_strategy = {
-        weight = 50
-      }
+      weight = 50
     }
   }
 
@@ -291,7 +317,7 @@ resource "aws_ecs_task_definition" "main" {
       }
     }
     ], var.enable_nightwatch ? [
-    {
+    merge({
       name      = "nightwatch-agent"
       image     = var.nightwatch_agent_image
       essential = false
@@ -322,7 +348,7 @@ resource "aws_ecs_task_definition" "main" {
           max-buffer-size       = "25m"
         }
       }
-    }
+    }, local.nightwatch_repository_credentials)
   ] : []))
 
   tags = merge(var.common_tags, {
@@ -528,7 +554,7 @@ resource "aws_ecs_task_definition" "worker" {
       }
     }
     ], var.enable_nightwatch ? [
-    {
+    merge({
       name      = "nightwatch-agent"
       image     = var.nightwatch_agent_image
       essential = false
@@ -559,7 +585,7 @@ resource "aws_ecs_task_definition" "worker" {
           max-buffer-size       = "25m"
         }
       }
-    }
+    }, local.nightwatch_repository_credentials)
   ] : []))
 
   tags = merge(var.common_tags, {

@@ -5,7 +5,7 @@
 # VPC Module (using public module)
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "~> 5.0"
+  version = "~> 6.0"
 
   name = "${var.app_name}-${var.environment}-vpc"
   cidr = var.vpc_cidr
@@ -15,7 +15,7 @@ module "vpc" {
   public_subnets  = [for k in range(3) : cidrsubnet(var.vpc_cidr, 4, k + 4)]
 
   enable_nat_gateway   = true
-  single_nat_gateway   = var.environment == "production" ? false : true # Production: one NAT per AZ for HA
+  single_nat_gateway   = var.single_nat_gateway
   enable_vpn_gateway   = false
   enable_dns_hostnames = true
   enable_dns_support   = true
@@ -30,7 +30,7 @@ module "vpc" {
 # ALB Security Group
 module "alb_security_group" {
   source  = "terraform-aws-modules/security-group/aws"
-  version = "~> 5.0"
+  version = "~> 5.3"
 
   name        = "${var.app_name}-${var.environment}-alb-sg"
   description = "Security group for Application Load Balancer"
@@ -50,7 +50,7 @@ module "alb_security_group" {
 # ECS Security Group
 module "ecs_security_group" {
   source  = "terraform-aws-modules/security-group/aws"
-  version = "~> 5.0"
+  version = "~> 5.3"
 
   name        = "${var.app_name}-${var.environment}-ecs-sg"
   description = "Security group for ECS tasks"
@@ -74,13 +74,13 @@ module "ecs_security_group" {
 # RDS Security Group
 module "rds_security_group" {
   source  = "terraform-aws-modules/security-group/aws"
-  version = "~> 5.0"
+  version = "~> 5.3"
 
   name        = "${var.app_name}-${var.environment}-rds-sg"
   description = "Security group for RDS/Aurora database"
   vpc_id      = module.vpc.vpc_id
 
-  ingress_with_source_security_group_id = [
+  ingress_with_source_security_group_id = concat([
     {
       from_port                = var.db_port
       to_port                  = var.db_port
@@ -95,6 +95,26 @@ module "rds_security_group" {
       source_security_group_id = module.vpn_security_group.security_group_id
       description              = "Allow database access from VPN clients"
     }
+    ],
+    [
+      for security_group_id in var.rds_additional_ingress_security_group_ids : {
+        from_port                = var.db_port
+        to_port                  = var.db_port
+        protocol                 = "tcp"
+        source_security_group_id = security_group_id
+        description              = "Allow database access from additional security group ${security_group_id}"
+      }
+    ]
+  )
+
+  ingress_with_cidr_blocks = [
+    for cidr in var.rds_additional_ingress_cidrs : {
+      from_port   = var.db_port
+      to_port     = var.db_port
+      protocol    = "tcp"
+      cidr_blocks = cidr
+      description = "Allow database access from ${cidr}"
+    }
   ]
 
   tags = merge(var.common_tags, {
@@ -105,7 +125,7 @@ module "rds_security_group" {
 # Redis Security Group
 module "redis_security_group" {
   source  = "terraform-aws-modules/security-group/aws"
-  version = "~> 5.0"
+  version = "~> 5.3"
 
   name        = "${var.app_name}-${var.environment}-redis-sg"
   description = "Security group for Redis cluster"
@@ -126,7 +146,7 @@ module "redis_security_group" {
 # VPN Client Security Group
 module "vpn_security_group" {
   source  = "terraform-aws-modules/security-group/aws"
-  version = "~> 5.0"
+  version = "~> 5.3"
 
   name        = "${var.app_name}-${var.environment}-vpn-sg"
   description = "Security group for VPN clients"
@@ -143,7 +163,7 @@ module "vpn_security_group" {
 # VPC Endpoints Security Group
 module "vpc_endpoints_security_group" {
   source  = "terraform-aws-modules/security-group/aws"
-  version = "~> 5.0"
+  version = "~> 5.3"
 
   name        = "${var.app_name}-${var.environment}-vpc-endpoints-sg"
   description = "Security group for VPC Interface Endpoints"
@@ -171,6 +191,8 @@ locals {
 }
 
 resource "aws_vpc_endpoint" "ssm" {
+  count = var.enable_vpc_interface_endpoints && contains(var.enabled_vpc_interface_endpoints, "ssm") ? 1 : 0
+
   service_name        = "com.amazonaws.${var.aws_region}.ssm"
   vpc_id              = module.vpc.vpc_id
   vpc_endpoint_type   = "Interface"
@@ -184,6 +206,8 @@ resource "aws_vpc_endpoint" "ssm" {
 }
 
 resource "aws_vpc_endpoint" "ssmmessages" {
+  count = var.enable_vpc_interface_endpoints && contains(var.enabled_vpc_interface_endpoints, "ssmmessages") ? 1 : 0
+
   service_name        = "com.amazonaws.${var.aws_region}.ssmmessages"
   vpc_id              = module.vpc.vpc_id
   vpc_endpoint_type   = "Interface"
@@ -197,6 +221,8 @@ resource "aws_vpc_endpoint" "ssmmessages" {
 }
 
 resource "aws_vpc_endpoint" "ec2messages" {
+  count = var.enable_vpc_interface_endpoints && contains(var.enabled_vpc_interface_endpoints, "ec2messages") ? 1 : 0
+
   service_name        = "com.amazonaws.${var.aws_region}.ec2messages"
   vpc_id              = module.vpc.vpc_id
   vpc_endpoint_type   = "Interface"
@@ -210,6 +236,8 @@ resource "aws_vpc_endpoint" "ec2messages" {
 }
 
 resource "aws_vpc_endpoint" "ecr_api" {
+  count = var.enable_vpc_interface_endpoints && contains(var.enabled_vpc_interface_endpoints, "ecr.api") ? 1 : 0
+
   service_name        = "com.amazonaws.${var.aws_region}.ecr.api"
   vpc_id              = module.vpc.vpc_id
   vpc_endpoint_type   = "Interface"
@@ -223,6 +251,8 @@ resource "aws_vpc_endpoint" "ecr_api" {
 }
 
 resource "aws_vpc_endpoint" "ecr_dkr" {
+  count = var.enable_vpc_interface_endpoints && contains(var.enabled_vpc_interface_endpoints, "ecr.dkr") ? 1 : 0
+
   service_name        = "com.amazonaws.${var.aws_region}.ecr.dkr"
   vpc_id              = module.vpc.vpc_id
   vpc_endpoint_type   = "Interface"
@@ -236,6 +266,8 @@ resource "aws_vpc_endpoint" "ecr_dkr" {
 }
 
 resource "aws_vpc_endpoint" "logs" {
+  count = var.enable_vpc_interface_endpoints && contains(var.enabled_vpc_interface_endpoints, "logs") ? 1 : 0
+
   service_name        = "com.amazonaws.${var.aws_region}.logs"
   vpc_id              = module.vpc.vpc_id
   vpc_endpoint_type   = "Interface"
@@ -249,6 +281,8 @@ resource "aws_vpc_endpoint" "logs" {
 }
 
 resource "aws_vpc_endpoint" "sqs" {
+  count = var.enable_vpc_interface_endpoints && contains(var.enabled_vpc_interface_endpoints, "sqs") ? 1 : 0
+
   service_name        = "com.amazonaws.${var.aws_region}.sqs"
   vpc_id              = module.vpc.vpc_id
   vpc_endpoint_type   = "Interface"

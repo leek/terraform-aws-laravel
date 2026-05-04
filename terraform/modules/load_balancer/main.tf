@@ -126,26 +126,43 @@ resource "aws_wafv2_web_acl" "main" {
     }
   }
 
-  # AWS Managed Rules - Bot Control Rule Set
-  rule {
-    name     = "AWSManagedRulesBotControlRuleSet"
-    priority = 4
+  # AWS Managed Rules - Bot Control Rule Set (~$10/mo flat + request fees)
+  dynamic "rule" {
+    for_each = var.enable_bot_control ? [1] : []
+    content {
+      name     = "AWSManagedRulesBotControlRuleSet"
+      priority = 4
 
-    override_action {
-      none {}
-    }
-
-    statement {
-      managed_rule_group_statement {
-        name        = "AWSManagedRulesBotControlRuleSet"
-        vendor_name = "AWS"
+      override_action {
+        none {}
       }
-    }
 
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "BotControlRuleSetMetric"
-      sampled_requests_enabled   = true
+      statement {
+        managed_rule_group_statement {
+          name        = "AWSManagedRulesBotControlRuleSet"
+          vendor_name = "AWS"
+
+          rule_action_override {
+            name = "CategorySocialMedia"
+            action_to_use {
+              count {}
+            }
+          }
+
+          rule_action_override {
+            name = "CategorySearchEngine"
+            action_to_use {
+              count {}
+            }
+          }
+        }
+      }
+
+      visibility_config {
+        cloudwatch_metrics_enabled = true
+        metric_name                = "BotControlRuleSetMetric"
+        sampled_requests_enabled   = true
+      }
     }
   }
 
@@ -218,9 +235,9 @@ resource "aws_wafv2_web_acl" "main" {
     }
   }
 
-  # Rate limiting rule
+  # Livewire/Filament endpoints are chatty and need a separate budget.
   rule {
-    name     = "RateLimitRule"
+    name     = "RateLimitLivewire"
     priority = 8
 
     action {
@@ -229,14 +246,99 @@ resource "aws_wafv2_web_acl" "main" {
 
     statement {
       rate_based_statement {
-        limit              = 2000
+        limit              = var.rate_limit_livewire
         aggregate_key_type = "IP"
+
+        scope_down_statement {
+          byte_match_statement {
+            search_string         = "/livewire/"
+            positional_constraint = "STARTS_WITH"
+
+            field_to_match {
+              uri_path {}
+            }
+
+            text_transformation {
+              priority = 0
+              type     = "NONE"
+            }
+          }
+        }
       }
     }
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "RateLimitRule"
+      metric_name                = "RateLimitLivewire"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # General rate limit excludes Livewire, static assets, and health probes.
+  rule {
+    name     = "RateLimitGeneral"
+    priority = 9
+
+    action {
+      block {}
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = var.rate_limit_general
+        aggregate_key_type = "IP"
+
+        scope_down_statement {
+          not_statement {
+            statement {
+              or_statement {
+                dynamic "statement" {
+                  for_each = toset(concat(["/livewire/", "/build/", "/css/", "/js/", "/storage/"], var.rate_limit_excluded_path_prefixes))
+                  content {
+                    byte_match_statement {
+                      search_string         = statement.value
+                      positional_constraint = "STARTS_WITH"
+
+                      field_to_match {
+                        uri_path {}
+                      }
+
+                      text_transformation {
+                        priority = 0
+                        type     = "NONE"
+                      }
+                    }
+                  }
+                }
+
+                dynamic "statement" {
+                  for_each = toset(concat([var.health_check_path, "/health", "/favicon.ico"], var.rate_limit_excluded_exact_paths))
+                  content {
+                    byte_match_statement {
+                      search_string         = statement.value
+                      positional_constraint = "EXACTLY"
+
+                      field_to_match {
+                        uri_path {}
+                      }
+
+                      text_transformation {
+                        priority = 0
+                        type     = "NONE"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "RateLimitGeneral"
       sampled_requests_enabled   = true
     }
   }
@@ -292,21 +394,21 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    interval            = 15
+    interval            = 5
     matcher             = "200"
-    path                = "/health"
+    path                = var.health_check_path
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
+    timeout             = 2
     unhealthy_threshold = 2
   }
 
-  deregistration_delay = 15
+  deregistration_delay = 5
 
   stickiness {
     type            = "lb_cookie"
     cookie_duration = 86400 # 24 hours
-    enabled         = true
+    enabled         = var.enable_stickiness
   }
 
   tags = merge(var.common_tags, {
@@ -338,7 +440,7 @@ resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.main.arn
   port              = "443"
   protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
+  ssl_policy        = var.ssl_policy
   certificate_arn   = var.certificate_arn
 
   default_action {
@@ -378,8 +480,111 @@ resource "aws_lb_listener_rule" "redirect_www" {
   tags = var.common_tags
 }
 
+# Attach each vanity domain certificate to the HTTPS listener (SNI)
+resource "aws_lb_listener_certificate" "vanity" {
+  for_each = { for vanity_domain in var.vanity_domains : vanity_domain.domain => vanity_domain }
+
+  listener_arn    = aws_lb_listener.https.arn
+  certificate_arn = each.value.certificate_arn
+}
+
+# Redirect vanity domain traffic to the configured target
+resource "aws_lb_listener_rule" "vanity_redirect" {
+  for_each = { for vanity_domain in var.vanity_domains : vanity_domain.domain => vanity_domain }
+
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 10 + index(var.vanity_domains, each.value)
+
+  action {
+    type = "redirect"
+
+    redirect {
+      host        = each.value.redirect_host
+      path        = each.value.redirect_path
+      port        = "443"
+      protocol    = "HTTPS"
+      query       = ""
+      status_code = "HTTP_301"
+    }
+  }
+
+  condition {
+    host_header {
+      values = [each.value.domain, "*.${each.value.domain}"]
+    }
+  }
+
+  tags = var.common_tags
+}
+
 # Associate WAF with ALB
 resource "aws_wafv2_web_acl_association" "main" {
   resource_arn = aws_lb.main.arn
   web_acl_arn  = aws_wafv2_web_acl.main.arn
+}
+
+# ========================================
+# Optional CloudFront Distribution in Front of ALB
+# ========================================
+
+resource "aws_cloudfront_distribution" "app" {
+  count = var.enable_cloudfront_app ? 1 : 0
+
+  enabled         = true
+  is_ipv6_enabled = true
+  price_class     = var.cloudfront_app_price_class
+  aliases         = var.cloudfront_app_aliases
+  http_version    = "http2and3"
+
+  origin {
+    domain_name = aws_lb.main.dns_name
+    origin_id   = "alb-${aws_lb.main.name}"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  default_cache_behavior {
+    target_origin_id         = "alb-${aws_lb.main.name}"
+    viewer_protocol_policy   = "redirect-to-https"
+    allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods           = ["GET", "HEAD", "OPTIONS"]
+    cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Managed-CachingDisabled
+    origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3" # Managed-AllViewer
+    compress                 = true
+  }
+
+  dynamic "ordered_cache_behavior" {
+    for_each = toset(["/build/*", "/css/filament/*", "/js/filament/*"])
+    content {
+      path_pattern           = ordered_cache_behavior.value
+      target_origin_id       = "alb-${aws_lb.main.name}"
+      viewer_protocol_policy = "redirect-to-https"
+      allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+      cached_methods         = ["GET", "HEAD", "OPTIONS"]
+      cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6" # Managed-CachingOptimized
+      compress               = true
+    }
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    acm_certificate_arn            = var.cloudfront_app_certificate_arn != "" ? var.cloudfront_app_certificate_arn : null
+    cloudfront_default_certificate = var.cloudfront_app_certificate_arn == ""
+    ssl_support_method             = var.cloudfront_app_certificate_arn != "" ? "sni-only" : null
+    minimum_protocol_version       = var.cloudfront_app_certificate_arn != "" ? "TLSv1.2_2021" : null
+  }
+
+  tags = merge(var.common_tags, {
+    Name = "${var.app_name}-${var.environment}-app-cloudfront"
+  })
 }

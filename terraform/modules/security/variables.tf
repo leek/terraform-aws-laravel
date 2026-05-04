@@ -44,3 +44,29 @@ variable "caller_identity_account_id" {
   description = "AWS account ID"
   type        = string
 }
+
+variable "enable_bedrock" {
+  description = "Enable AWS Bedrock access for ECS tasks and the Laravel IAM user"
+  type        = bool
+  default     = false
+}
+
+variable "bedrock_region" {
+  description = "AWS region for Bedrock. Leave empty to use aws_region."
+  type        = string
+  default     = ""
+}
+
+variable "dockerhub_username" {
+  description = "Docker Hub username for authenticated image pulls. Empty disables secret creation."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "dockerhub_access_token" {
+  description = "Docker Hub personal access token for authenticated image pulls. Empty disables secret creation."
+  type        = string
+  default     = ""
+  sensitive   = true
+}

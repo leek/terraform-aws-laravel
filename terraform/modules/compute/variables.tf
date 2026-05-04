@@ -18,6 +18,16 @@ variable "domain_name" {
   type        = string
 }
 
+variable "db_connection" {
+  description = "Laravel database connection driver (mysql or pgsql)"
+  type        = string
+}
+
+variable "db_port" {
+  description = "Database port"
+  type        = number
+}
+
 variable "vpc_id" {
   description = "VPC ID"
   type        = string
@@ -225,6 +235,12 @@ variable "meilisearch_master_key" {
   sensitive   = true
 }
 
+variable "ses_configuration_set_name" {
+  description = "SES configuration set name to expose to the application"
+  type        = string
+  default     = ""
+}
+
 variable "redis_endpoint" {
   description = "Redis endpoint"
   type        = string
@@ -242,6 +258,12 @@ variable "additional_environment_variables" {
     value = string
   }))
   default = []
+}
+
+variable "additional_secret_environment_variable_names" {
+  description = "Additional secret environment variable names stored in Parameter Store by the configuration module"
+  type        = list(string)
+  default     = []
 }
 
 variable "cloudfront_domain" {
@@ -329,4 +351,10 @@ variable "nightwatch_agent_memory" {
   description = "Memory (MB) for Nightwatch agent sidecar"
   type        = number
   default     = 256
+}
+
+variable "dockerhub_credentials_secret_arn" {
+  description = "Secrets Manager secret ARN for Docker Hub repositoryCredentials. Used only for non-ECR Nightwatch images."
+  type        = string
+  default     = ""
 }
