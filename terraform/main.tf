@@ -41,13 +41,11 @@ locals {
 # Workspace Validation
 # ========================================
 
-# Validate workspace matches environment to prevent accidental deployments
-resource "null_resource" "validate_workspace" {
-  lifecycle {
-    precondition {
-      condition     = terraform.workspace == var.environment
-      error_message = "Terraform workspace '${terraform.workspace}' does not match environment '${var.environment}'. Please switch to the correct workspace using: terraform workspace select ${var.environment}"
-    }
+# Validate workspace matches environment to prevent accidental deployments.
+check "workspace_matches_environment" {
+  assert {
+    condition     = terraform.workspace == var.environment
+    error_message = "Terraform workspace '${terraform.workspace}' does not match environment '${var.environment}'. Please switch to the correct workspace using: terraform workspace select ${var.environment}"
   }
 }
 
@@ -277,6 +275,7 @@ module "compute" {
   ecs_security_group_id      = module.networking.ecs_security_group_id
   target_group_arn           = module.load_balancer.target_group_arn
   ecr_repository_url         = module.container_registry.repository_url
+  image_tag                  = var.image_tag
   ecs_execution_role_arn     = module.security.ecs_execution_role_arn
   ecs_task_role_arn          = module.security.ecs_task_role_arn
   log_group_name             = module.monitoring.log_group_name
@@ -284,6 +283,7 @@ module "compute" {
   cloudfront_domain          = var.cloudfront_domain
   sqs_suffix                 = module.messaging.sqs_suffix
   sqs_queue_names_csv        = module.messaging.queue_names_csv
+  sqs_queue_full_names       = module.messaging.queue_full_names
   caller_identity_account_id = data.aws_caller_identity.current.account_id
 
   # Web service configuration
@@ -294,9 +294,12 @@ module "compute" {
   max_capacity     = var.max_capacity
 
   # Queue worker configuration
-  queue_worker_cpu           = var.queue_worker_cpu
-  queue_worker_memory        = var.queue_worker_memory
-  queue_worker_desired_count = var.queue_worker_desired_count
+  queue_worker_cpu                = var.queue_worker_cpu
+  queue_worker_memory             = var.queue_worker_memory
+  queue_worker_desired_count      = var.queue_worker_desired_count
+  queue_worker_min_capacity       = var.queue_worker_min_capacity
+  queue_worker_max_capacity       = var.queue_worker_max_capacity
+  queue_worker_target_age_seconds = var.queue_worker_target_age_seconds
 
   # Scheduler configuration
   scheduler_cpu           = var.scheduler_cpu
@@ -383,7 +386,7 @@ module "bastion" {
   rds_database_name              = module.database.rds_database_name
   app_db_username                = var.app_db_username
   app_db_password                = var.app_db_password
-  db_read_only_password               = var.db_read_only_password
+  db_read_only_password          = var.db_read_only_password
   aws_region                     = var.aws_region
   db_engine                      = var.db_engine
   db_port                        = local.db_port

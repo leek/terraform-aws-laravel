@@ -21,8 +21,13 @@ variable "app_key" {
 }
 
 variable "environment" {
-  description = "Environment (dev, staging, prod)"
+  description = "Environment name. Must match the selected Terraform workspace."
   type        = string
+
+  validation {
+    condition     = contains(["staging", "uat", "production"], var.environment)
+    error_message = "environment must be one of: staging, uat, or production."
+  }
 }
 
 variable "domain_name" {
@@ -132,6 +137,24 @@ variable "queue_worker_desired_count" {
   default     = 1
 }
 
+variable "queue_worker_min_capacity" {
+  description = "Minimum number of queue worker tasks for SQS-driven autoscaling"
+  type        = number
+  default     = 1
+}
+
+variable "queue_worker_max_capacity" {
+  description = "Maximum number of queue worker tasks for SQS-driven autoscaling"
+  type        = number
+  default     = 5
+}
+
+variable "queue_worker_target_age_seconds" {
+  description = "Target maximum age in seconds for the oldest SQS message before queue workers scale out"
+  type        = number
+  default     = 60
+}
+
 # Scheduler (runs Laravel's cron/scheduled tasks)
 variable "scheduler_cpu" {
   description = "CPU units for the scheduler container (256 = 0.25 vCPU, 512 = 0.5 vCPU)"
@@ -156,6 +179,12 @@ variable "queue_names" {
   description = "Logical queue names for SQS. Each becomes a separate SQS queue."
   type        = list(string)
   default     = ["default"]
+}
+
+variable "image_tag" {
+  description = "Container image tag used by Terraform-created ECS task definitions. Deploy tooling can register later task-definition revisions pinned to immutable tags."
+  type        = string
+  default     = "latest"
 }
 
 # ========================================

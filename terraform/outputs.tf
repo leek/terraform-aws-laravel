@@ -176,8 +176,13 @@ output "sqs_suffix" {
 }
 
 output "sqs_queue_names_csv" {
-  description = "Comma-separated list of logical queue names"
+  description = "Comma-separated list of full SQS queue names"
   value       = module.messaging.queue_names_csv
+}
+
+output "sqs_queue_full_names" {
+  description = "List of full SQS queue names"
+  value       = module.messaging.queue_full_names
 }
 
 output "sqs_queue_urls" {

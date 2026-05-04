@@ -266,7 +266,7 @@ resource "aws_ecs_task_definition" "main" {
   container_definitions = jsonencode(concat([
     {
       name      = "app"
-      image     = "${var.ecr_repository_url}:latest"
+      image     = "${var.ecr_repository_url}:${var.image_tag}"
       essential = true
 
       portMappings = [
@@ -285,6 +285,8 @@ resource "aws_ecs_task_definition" "main" {
           awslogs-group         = var.log_group_name
           awslogs-region        = var.aws_region
           awslogs-stream-prefix = "ecs"
+          mode                  = "non-blocking"
+          max-buffer-size       = "25m"
         }
       }
     }
@@ -316,6 +318,8 @@ resource "aws_ecs_task_definition" "main" {
           awslogs-group         = var.log_group_name
           awslogs-region        = var.aws_region
           awslogs-stream-prefix = "nightwatch"
+          mode                  = "non-blocking"
+          max-buffer-size       = "25m"
         }
       }
     }
@@ -366,6 +370,10 @@ resource "aws_ecs_service" "main" {
 
   # Enable ECS Exec for debugging
   enable_execute_command = true
+
+  lifecycle {
+    ignore_changes = [task_definition, desired_count]
+  }
 
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-${var.environment}-service"
@@ -494,7 +502,7 @@ resource "aws_ecs_task_definition" "worker" {
   container_definitions = jsonencode(concat([
     {
       name      = each.key
-      image     = "${var.ecr_repository_url}:latest"
+      image     = "${var.ecr_repository_url}:${var.image_tag}"
       essential = true
 
       portMappings = each.value.port_mappings
@@ -514,6 +522,8 @@ resource "aws_ecs_task_definition" "worker" {
           awslogs-group         = var.log_group_name
           awslogs-region        = var.aws_region
           awslogs-stream-prefix = each.value.log_stream_prefix
+          mode                  = "non-blocking"
+          max-buffer-size       = "25m"
         }
       }
     }
@@ -545,6 +555,8 @@ resource "aws_ecs_task_definition" "worker" {
           awslogs-group         = var.log_group_name
           awslogs-region        = var.aws_region
           awslogs-stream-prefix = "nightwatch-${each.key}"
+          mode                  = "non-blocking"
+          max-buffer-size       = "25m"
         }
       }
     }
@@ -590,7 +602,83 @@ resource "aws_ecs_service" "worker" {
     }
   }
 
+  lifecycle {
+    ignore_changes = [task_definition, desired_count]
+  }
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-${var.environment}-${each.key}-service"
   })
+}
+
+# ========================================
+# Queue Worker Auto Scaling (SQS-driven)
+# ========================================
+
+locals {
+  queue_worker_autoscaling_enabled = (
+    contains(keys(local.enabled_worker_services), "queue-worker") &&
+    length(var.sqs_queue_full_names) > 0
+  )
+}
+
+resource "aws_appautoscaling_target" "queue_worker" {
+  count = local.queue_worker_autoscaling_enabled ? 1 : 0
+
+  max_capacity       = var.queue_worker_max_capacity
+  min_capacity       = var.queue_worker_min_capacity
+  resource_id        = "service/${module.ecs.cluster_name}/${aws_ecs_service.worker["queue-worker"].name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+
+  tags = var.common_tags
+}
+
+resource "aws_appautoscaling_policy" "queue_worker_age" {
+  count = local.queue_worker_autoscaling_enabled ? 1 : 0
+
+  name               = "${var.app_name}-${var.environment}-queue-worker-age-scaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.queue_worker[0].resource_id
+  scalable_dimension = aws_appautoscaling_target.queue_worker[0].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.queue_worker[0].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    target_value = var.queue_worker_target_age_seconds
+
+    customized_metric_specification {
+      dynamic "metrics" {
+        for_each = var.sqs_queue_full_names
+        content {
+          id          = "m${metrics.key}"
+          label       = "AgeOldest_${metrics.value}"
+          return_data = false
+
+          metric_stat {
+            stat = "Maximum"
+
+            metric {
+              namespace   = "AWS/SQS"
+              metric_name = "ApproximateAgeOfOldestMessage"
+
+              dimensions {
+                name  = "QueueName"
+                value = metrics.value
+              }
+            }
+          }
+        }
+      }
+
+      metrics {
+        id          = "max_age"
+        label       = "MaxAgeAcrossQueues"
+        return_data = true
+        expression  = "MAX([${join(",", [for i, _ in var.sqs_queue_full_names : "m${i}"])}])"
+      }
+    }
+
+    scale_in_cooldown  = 300
+    scale_out_cooldown = 60
+  }
 }

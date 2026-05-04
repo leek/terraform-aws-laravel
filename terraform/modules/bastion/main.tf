@@ -128,7 +128,7 @@ resource "aws_instance" "bastion" {
     rds_database_name              = var.rds_database_name
     app_db_username                = var.app_db_username
     app_db_password                = var.app_db_password
-    db_read_only_password               = var.db_read_only_password
+    db_read_only_password          = var.db_read_only_password
     aws_region                     = var.aws_region
     db_engine                      = var.db_engine
     db_port                        = var.db_port

@@ -89,13 +89,13 @@ module "rds" {
 
   identifier = "${var.app_name}-${var.environment}-db"
 
-  engine                       = local.current_engine.engine
-  engine_version               = local.current_engine.engine_version
-  major_engine_version         = local.current_engine.major_engine_version
-  allow_major_version_upgrade  = true
-  instance_class               = var.db_instance_class
-  allocated_storage            = var.db_allocated_storage
-  max_allocated_storage = var.db_max_allocated_storage
+  engine                      = local.current_engine.engine
+  engine_version              = local.current_engine.engine_version
+  major_engine_version        = local.current_engine.major_engine_version
+  allow_major_version_upgrade = true
+  instance_class              = var.db_instance_class
+  allocated_storage           = var.db_allocated_storage
+  max_allocated_storage       = var.db_max_allocated_storage
 
   db_name  = "${var.app_name}_${var.environment}"
   username = "admin"

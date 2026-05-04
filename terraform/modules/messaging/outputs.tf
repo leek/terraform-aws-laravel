@@ -6,8 +6,13 @@ output "sqs_suffix" {
 }
 
 output "queue_names_csv" {
-  description = "Comma-separated list of logical queue names for the worker"
-  value       = join(",", var.queue_names)
+  description = "Comma-separated list of full SQS queue names (with suffix) for the worker"
+  value       = join(",", [for name in var.queue_names : "${name}${local.sqs_suffix}"])
+}
+
+output "queue_full_names" {
+  description = "List of full SQS queue names (with suffix). Used for SQS-driven autoscaling metric math."
+  value       = [for name in var.queue_names : "${name}${local.sqs_suffix}"]
 }
 
 output "queue_urls" {

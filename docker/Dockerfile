@@ -106,6 +106,9 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     # PECL - redis is always installed
     && pecl install redis \
     && docker-php-ext-enable redis \
+    # APCu backs Composer's APCu autoloader cache
+    && pecl install apcu \
+    && docker-php-ext-enable apcu \
     # Swoole - only when using octane-swoole
     && if [ "$APP_SERVER_MODE" = "octane-swoole" ]; then \
         pecl install swoole && docker-php-ext-enable swoole; \
@@ -147,9 +150,10 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Copy dependency files
 COPY composer.json composer.lock auth.json* package.json package-lock.json .npmrc* ./
 
-# Copy optional vendor-src and patches directories if they exist
+# Copy optional vendor-src, vendor-npm, and patches directories if they exist
 RUN --mount=type=bind,source=.,target=/src \
     if [ -d /src/vendor-src ]; then cp -a /src/vendor-src ./vendor-src; fi && \
+    if [ -d /src/vendor-npm ]; then cp -a /src/vendor-npm ./vendor-npm; fi && \
     if [ -d /src/patches ]; then cp -a /src/patches ./patches; fi
 
 # Install PHP dependencies with cache mounts
@@ -164,8 +168,8 @@ RUN --mount=type=cache,target=/root/.npm \
 # Copy the rest of the application files
 COPY . .
 
-# Build frontend assets
-RUN npm run build
+# Regenerate the optimized autoloader after app/ source is present.
+RUN composer dump-autoload --optimize --classmap-authoritative --apcu --no-scripts --no-interaction
 
 # Create minimal .env for build-time caching (will be replaced at runtime)
 # We need APP_KEY and basic config for artisan commands to work
@@ -173,11 +177,15 @@ RUN npm run build
 RUN cp .env.example .env && \
     (CACHE_STORE=array php artisan key:generate --no-interaction --force --no-ansi || true)
 
+# Build frontend assets
+RUN npm run build
+
 # Cache Laravel artifacts at build time (except config which depends on env vars)
 # This significantly speeds up container startup time
 # Override CACHE_STORE to avoid database connections during build
 # Set memory_limit for resource-intensive caching operations
-RUN CACHE_STORE=array php -d memory_limit=-1 artisan event:cache --no-interaction --no-ansi && \
+RUN CACHE_STORE=array php -d memory_limit=-1 artisan filament:assets --no-interaction --no-ansi && \
+    CACHE_STORE=array php -d memory_limit=-1 artisan event:cache --no-interaction --no-ansi && \
     CACHE_STORE=array php -d memory_limit=-1 artisan view:cache --no-interaction --no-ansi && \
     CACHE_STORE=array php -d memory_limit=-1 artisan icons:cache --no-interaction --no-ansi && \
     CACHE_STORE=array php -d memory_limit=-1 artisan filament:cache-components --no-interaction --no-ansi

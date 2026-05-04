@@ -43,6 +43,12 @@ variable "ecr_repository_url" {
   type        = string
 }
 
+variable "image_tag" {
+  description = "Container image tag used by Terraform-created task definitions. Deploy tooling can register later task-definition revisions pinned to immutable tags."
+  type        = string
+  default     = "latest"
+}
+
 variable "ecs_execution_role_arn" {
   description = "ECS execution role ARN"
   type        = string
@@ -69,8 +75,14 @@ variable "sqs_suffix" {
 }
 
 variable "sqs_queue_names_csv" {
-  description = "Comma-separated list of logical queue names for the worker"
+  description = "Comma-separated list of full SQS queue names for the worker"
   type        = string
+}
+
+variable "sqs_queue_full_names" {
+  description = "Full SQS queue names used for queue-worker autoscaling metrics"
+  type        = list(string)
+  default     = []
 }
 
 variable "caller_identity_account_id" {
@@ -160,6 +172,24 @@ variable "queue_worker_desired_count" {
   description = "Desired number of queue worker tasks"
   type        = number
   default     = 1
+}
+
+variable "queue_worker_min_capacity" {
+  description = "Minimum number of queue worker tasks for SQS-driven autoscaling"
+  type        = number
+  default     = 1
+}
+
+variable "queue_worker_max_capacity" {
+  description = "Maximum number of queue worker tasks for SQS-driven autoscaling"
+  type        = number
+  default     = 5
+}
+
+variable "queue_worker_target_age_seconds" {
+  description = "Target maximum age in seconds for the oldest SQS message before queue workers scale out"
+  type        = number
+  default     = 60
 }
 
 # ========================================
