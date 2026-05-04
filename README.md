@@ -1,6 +1,8 @@
 > [!WARNING]
 > This Terraform configuration provisions real AWS infrastructure that may incur significant costs depending on your usage and configuration. **Use at your own risk** - you are solely responsible for reviewing, understanding, and monitoring any resources and charges created by this code. Always test in a non-production environment and review the Terraform plan carefully before applying changes.
 
+<img width="1440" height="785" alt="cover" src="https://github.com/user-attachments/assets/48b0ec23-e948-4d60-9ce3-e3aa9e417d56" />
+
 # Laravel AWS Infrastructure with Terraform
 
 Production-ready AWS infrastructure for Laravel applications using Terraform. This configuration deploys a complete, scalable infrastructure on AWS with best practices for security, monitoring, high availability, and compliance.
