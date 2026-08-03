@@ -28,7 +28,7 @@ jobs:
           python-version: "3.x"
 
       - name: Test with Checkov
-        uses: bridgecrewio/checkov-action@v12
+        uses: bridgecrewio/checkov-action@v12.3114.0
         with:
           output_format: cli,sarif
           output_file_path: console,results.sarif
