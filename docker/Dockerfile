@@ -67,7 +67,7 @@ RUN set -o pipefail && \
 # ========================================
 # Stage: Base image with PHP extensions
 # ========================================
-FROM php:8.4-fpm-alpine AS base
+FROM php:8.6-fpm-alpine AS base
 
 ARG APP_SERVER_MODE
 ARG INSTALL_MYSQL
